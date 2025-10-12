@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://bqyxsn7hxvf7h"]
 
-[ext_resource type="PackedScene" uid="uid://ck5jy6m8rxn1w" path="res://scenes/environment/slope.tscn" id="1_slope"]
+[ext_resource type="PackedScene" uid="uid://1ngxlvmdodiq" path="res://scenes/environment/slope.tscn" id="1_slope"]
 [ext_resource type="PackedScene" uid="uid://c6xj3q8pxr7kv" path="res://scenes/player/player.tscn" id="2_player"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
@@ -26,7 +26,7 @@ transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75
 shadow_enabled = true
 
 [node name="Slope" parent="." instance=ExtResource("1_slope")]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, -5, -15)
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 0, -15)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, -10)

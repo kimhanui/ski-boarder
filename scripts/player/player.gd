@@ -29,8 +29,22 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_VELOCITY
 
 	# Get input direction
-	var input_dir = Input.get_vector("move_left", "move_right", "move_back", "move_forward")
+	# Input.get_vector(negative_x, positive_x, negative_y, positive_y)
+	var input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+
+	# Log input for debugging
+	if input_dir != Vector2.ZERO:
+		var keys_pressed = []
+		if Input.is_action_pressed("move_forward"):
+			keys_pressed.append("W (Forward)")
+		if Input.is_action_pressed("move_back"):
+			keys_pressed.append("S (Back)")
+		if Input.is_action_pressed("move_left"):
+			keys_pressed.append("A (Left)")
+		if Input.is_action_pressed("move_right"):
+			keys_pressed.append("D (Right)")
+		print("Keys pressed: ", keys_pressed, " | Input direction: ", input_dir)
 
 	# Apply movement
 	if direction:

@@ -1,19 +1,30 @@
-[gd_scene load_steps=4 format=3 uid="uid://c6xj3q8pxr7kv"]
+[gd_scene load_steps=7 format=3 uid="uid://c6xj3q8pxr7kv"]
 
-[ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player_script"]
+[ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/player/player.gd" id="1_player_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-radius = 0.5
 height = 1.8
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
-radius = 0.5
 height = 1.8
 
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_snow"]
+direction = Vector3(0, -1, -1)
+spread = 15.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+gravity = Vector3(0, -2, 0)
+
+[sub_resource type="SphereMesh" id="SphereMesh_eye"]
+radius = 0.08
+height = 0.16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+
 [node name="Player" type="CharacterBody3D"]
-script = ExtResource("1_player_script")
-collision_layer = 1
 collision_mask = 2
+script = ExtResource("1_player_script")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("CapsuleShape3D_1")
@@ -31,3 +42,19 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 [node name="SnowParticles" type="GPUParticles3D" parent="."]
 amount = 50
 lifetime = 2.0
+process_material = SubResource("ParticleProcessMaterial_snow")
+
+[node name="LeftEye" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.6, -0.4)
+mesh = SubResource("SphereMesh_eye")
+surface_material_override/0 = SubResource("StandardMaterial3D_eye")
+
+[node name="RightEye" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, 0.6, -0.4)
+mesh = SubResource("SphereMesh_eye")
+surface_material_override/0 = SubResource("StandardMaterial3D_eye")
+
+[node name="Mouth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.3, 0, 0, 0, 1, 0, 0.3, -0.42)
+mesh = SubResource("SphereMesh_eye")
+surface_material_override/0 = SubResource("StandardMaterial3D_eye")

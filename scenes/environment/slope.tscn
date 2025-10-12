@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://ck5jy6m8rxn1w"]
+
+[ext_resource type="Material" uid="uid://cbj2qw8k3x7vy" path="res://resources/materials/snow_material.tres" id="1_snow_material"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_slope"]
+size = Vector3(20, 2, 50)
+
+[sub_resource type="BoxMesh" id="BoxMesh_slope"]
+size = Vector3(20, 2, 50)
+
+[node name="Slope" type="StaticBody3D"]
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_slope")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_slope")
+surface_material_override/0 = ExtResource("1_snow_material")

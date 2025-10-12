@@ -1,119 +1,119 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+이 파일은 이 저장소의 코드 작업 시 Claude Code (claude.ai/code)에 가이드를 제공합니다.
 
-## Project Overview
+## 프로젝트 개요
 
-This is a Godot game project for a ski-boarder game. The project is currently in initial setup phase.
+스키 보더 게임을 위한 Godot 게임 프로젝트입니다. 현재 초기 설정 단계에 있습니다.
 
-## Development Commands
+## 개발 명령어
 
-### Running the Game
+### 게임 실행하기
 ```bash
-# Open the project in Godot editor
+# Godot 에디터에서 프로젝트 열기
 godot --editor --path .
 
-# Run the game directly
+# 게임 직접 실행
 godot --path .
 
-# Run a specific scene
+# 특정 씬 실행
 godot --path . --scene path/to/scene.tscn
 ```
 
-### Building/Exporting
+### 빌드/내보내기
 ```bash
-# Export for a specific platform (requires export preset configured)
+# 특정 플랫폼으로 내보내기 (내보내기 프리셋 구성 필요)
 godot --export "Platform Name" output_path
 
-# Headless export (no editor window)
+# 헤드리스 내보내기 (에디터 창 없음)
 godot --headless --export "Platform Name" output_path
 ```
 
-### Testing
-GDScript testing typically uses GUT (Godot Unit Test) or gdUnit4:
+### 테스트
+GDScript 테스트는 일반적으로 GUT (Godot Unit Test) 또는 gdUnit4를 사용합니다:
 ```bash
-# If using GUT (once installed)
+# GUT 사용 시 (설치 후)
 godot --path . -s addons/gut/gut_cmdln.gd
 
-# If using gdUnit4 (once installed)
+# gdUnit4 사용 시 (설치 후)
 godot --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd
 ```
 
-## Godot Project Structure
+## Godot 프로젝트 구조
 
-### Scene Organization
-- **scenes/**: Main game scenes (.tscn files)
-  - Organize by feature/level (e.g., scenes/levels/, scenes/ui/, scenes/player/)
+### 씬 구성
+- **scenes/**: 메인 게임 씬 (.tscn 파일)
+  - 기능/레벨별로 구성 (예: scenes/levels/, scenes/ui/, scenes/player/)
 
-### Script Organization
-- **scripts/**: GDScript files (.gd)
-  - Should mirror scene organization
-  - Global scripts/autoloads typically in scripts/autoload/
+### 스크립트 구성
+- **scripts/**: GDScript 파일 (.gd)
+  - 씬 구성을 반영해야 함
+  - 전역 스크립트/오토로드는 일반적으로 scripts/autoload/에 위치
 
-### Resource Organization
-- **assets/**: Game assets
-  - **sprites/**: 2D sprites and textures
-  - **models/**: 3D models and meshes
-  - **audio/**: Sound effects and music
-  - **fonts/**: Font files
+### 리소스 구성
+- **assets/**: 게임 에셋
+  - **sprites/**: 2D 스프라이트 및 텍스처
+  - **models/**: 3D 모델 및 메시
+  - **audio/**: 효과음 및 음악
+  - **fonts/**: 폰트 파일
 
-- **resources/**: Godot resource files (.tres)
-  - Reusable resources like materials, animations, themes
+- **resources/**: Godot 리소스 파일 (.tres)
+  - 재사용 가능한 리소스 (재질, 애니메이션, 테마 등)
 
-## Key Godot Concepts for This Project
+## 이 프로젝트의 주요 Godot 개념
 
-### Node Structure
-Godot uses a tree-based node system. Common nodes for a ski-boarder game:
-- **CharacterBody2D/3D**: For the player ski-boarder with physics
-- **Area2D/3D**: For triggers and collectibles
-- **TileMap**: For terrain/slopes (2D)
-- **MeshInstance3D**: For terrain (3D)
-- **Camera2D/3D**: For following the player
+### 노드 구조
+Godot는 트리 기반 노드 시스템을 사용합니다. 스키 보더 게임의 일반적인 노드:
+- **CharacterBody2D/3D**: 물리 효과가 적용된 플레이어 스키 보더용
+- **Area2D/3D**: 트리거 및 수집 아이템용
+- **TileMap**: 지형/슬로프용 (2D)
+- **MeshInstance3D**: 지형용 (3D)
+- **Camera2D/3D**: 플레이어 추적용
 
-### Signals
-Godot's observer pattern for decoupled communication between nodes. Define signals at the top of scripts:
+### 시그널
+노드 간 분리된 통신을 위한 Godot의 옵저버 패턴입니다. 스크립트 상단에 시그널을 정의합니다:
 ```gdscript
 signal player_crashed
 signal trick_completed(trick_name, score)
 ```
 
-### Autoloads (Singletons)
-Global scripts accessible from anywhere, defined in project.godot. Typical uses:
-- Game state management
-- Score/progress tracking
-- Audio management
-- Scene transition handling
+### 오토로드 (싱글톤)
+project.godot에 정의된 어디서나 접근 가능한 전역 스크립트입니다. 일반적인 용도:
+- 게임 상태 관리
+- 점수/진행 상황 추적
+- 오디오 관리
+- 씬 전환 처리
 
-### Physics and Movement
-- Use `_physics_process(delta)` for player movement and physics
-- CharacterBody2D/3D provides `move_and_slide()` for collision-aware movement
-- Consider gravity, acceleration, and momentum for ski physics
+### 물리 및 움직임
+- 플레이어 움직임과 물리에는 `_physics_process(delta)` 사용
+- CharacterBody2D/3D는 충돌 인식 움직임을 위한 `move_and_slide()` 제공
+- 스키 물리를 위해 중력, 가속도, 운동량을 고려
 
-## GDScript Conventions
+## GDScript 규칙
 
-### File Structure
+### 파일 구조
 ```gdscript
-extends NodeType  # or class_name ClassName
+extends NodeType  # 또는 class_name ClassName
 
-# Signals
+# 시그널
 signal signal_name
 
-# Constants
+# 상수
 const CONSTANT_NAME = value
 
-# Exported variables (appear in editor)
+# 내보낸 변수 (에디터에 표시됨)
 @export var variable_name: Type = default_value
 
-# Public variables
+# 공개 변수
 var public_variable: Type
 
-# Private variables (prefix with _)
+# 비공개 변수 (밑줄 접두사)
 var _private_variable: Type
 
-# Onready variables (initialized when node is ready)
+# Onready 변수 (노드가 준비되면 초기화)
 @onready var _node_ref = $NodePath
 
-# Built-in callbacks
+# 내장 콜백
 func _ready() -> void:
     pass
 
@@ -123,36 +123,36 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
     pass
 
-# Public methods
+# 공개 메서드
 func public_method() -> void:
     pass
 
-# Private methods
+# 비공개 메서드
 func _private_method() -> void:
     pass
 ```
 
-### Naming Conventions
-- Files: snake_case.gd (e.g., player_controller.gd)
-- Classes: PascalCase (e.g., PlayerController)
-- Variables/functions: snake_case (e.g., jump_force, calculate_speed())
-- Constants: SCREAMING_SNAKE_CASE (e.g., MAX_SPEED)
-- Private members: prefix with underscore (e.g., _internal_state)
-- Signals: past tense, snake_case (e.g., health_changed, enemy_died)
+### 명명 규칙
+- 파일: snake_case.gd (예: player_controller.gd)
+- 클래스: PascalCase (예: PlayerController)
+- 변수/함수: snake_case (예: jump_force, calculate_speed())
+- 상수: SCREAMING_SNAKE_CASE (예: MAX_SPEED)
+- 비공개 멤버: 밑줄 접두사 (예: _internal_state)
+- 시그널: 과거형, snake_case (예: health_changed, enemy_died)
 
-## Project Configuration
+## 프로젝트 구성
 
-The project.godot file contains:
-- Project settings and metadata
-- Autoload configurations
-- Input mappings
-- Display/rendering settings
-- Physics layer names
+project.godot 파일에는 다음이 포함됩니다:
+- 프로젝트 설정 및 메타데이터
+- 오토로드 구성
+- 입력 매핑
+- 디스플레이/렌더링 설정
+- 물리 레이어 이름
 
-Always check project.godot for input action names when implementing controls.
+컨트롤을 구현할 때는 항상 project.godot에서 입력 액션 이름을 확인하세요.
 
-## Godot Version
+## Godot 버전
 
-Check the `config_version` and `features` in project.godot to determine the Godot version. GDScript syntax varies between Godot 3.x and 4.x:
-- Godot 4.x uses `@export`, `@onready`, `@tool` annotations
-- Godot 3.x uses `export`, `onready`, `tool` keywords
+project.godot의 `config_version`과 `features`를 확인하여 Godot 버전을 파악하세요. GDScript 구문은 Godot 3.x와 4.x 간에 차이가 있습니다:
+- Godot 4.x는 `@export`, `@onready`, `@tool` 어노테이션 사용
+- Godot 3.x는 `export`, `onready`, `tool` 키워드 사용

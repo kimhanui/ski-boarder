@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://b7j8lam3n4p5q"]
+
+[ext_resource type="Script" path="res://scenes/environment/procedural_slope.gd" id="1_script"]
+
+[node name="ProceduralSlope" type="Node3D"]
+script = ExtResource("1_script")
+slope_data_path = "res://resources/slope_data.json"

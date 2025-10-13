@@ -11,6 +11,7 @@ const GRAVITY = 9.8
 @onready var camera_first_person = $Camera3D_FirstPerson
 
 var is_first_person = false
+var _player_cameras_active = true  # Track if player cameras are in control
 
 
 func _ready() -> void:
@@ -57,10 +58,27 @@ func _physics_process(delta: float) -> void:
 	# Apply physics
 	move_and_slide()
 
+	# Debug: log position when falling
+	if global_position.y < -50:
+		print("Player fell through terrain! Position: ", global_position)
+
 
 func _input(event: InputEvent) -> void:
-	# Toggle camera
-	if event.is_action_pressed("toggle_camera"):
+	# Toggle camera (only when player cameras are active)
+	if event.is_action_pressed("toggle_camera") and _player_cameras_active:
 		is_first_person = !is_first_person
 		camera_third_person.current = !is_first_person
+		camera_first_person.current = is_first_person
+
+
+## Called when switching to/from free camera
+func set_cameras_active(active: bool) -> void:
+	_player_cameras_active = active
+	if not active:
+		# Deactivate both player cameras
+		camera_third_person.current = false
+		camera_first_person.current = false
+	else:
+		# Restore the camera that was active
+		camera_third_person.current = not is_first_person
 		camera_first_person.current = is_first_person

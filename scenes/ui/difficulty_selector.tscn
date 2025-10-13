@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=3 uid="uid://difficulty_selector_ui"]
+
+[ext_resource type="Script" path="res://scenes/ui/difficulty_selector.gd" id="1_difficulty_selector_script"]
+
+[node name="DifficultySelector" type="Control"]
+layout_mode = 3
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -200.0
+offset_right = 200.0
+grow_vertical = 0
+script = ExtResource("1_difficulty_selector_script")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="CurrentLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Current: MEDIUM"
+horizontal_alignment = 1
+
+[node name="EasyButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Easy"
+
+[node name="MediumButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Medium"
+
+[node name="HardButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Hard"
+
+[node name="RegenerateButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Regenerate Terrain"
+
+[node name="CameraLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Tab: Toggle Camera"
+horizontal_alignment = 1

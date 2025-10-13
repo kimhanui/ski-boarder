@@ -1,7 +1,10 @@
-[gd_scene load_steps=6 format=3 uid="uid://bqyxsn7hxvf7h"]
+[gd_scene load_steps=9 format=3 uid="uid://bqyxsn7hxvf7h"]
 
-[ext_resource type="PackedScene" uid="uid://1ngxlvmdodiq" path="res://scenes/environment/slope.tscn" id="1_slope"]
+[ext_resource type="Script" uid="uid://cn342iexxqcl4" path="res://scenes/main.gd" id="1_main_script"]
+[ext_resource type="PackedScene" path="res://scenes/environment/procedural_slope.tscn" id="1_procedural_slope"]
 [ext_resource type="PackedScene" uid="uid://c6xj3q8pxr7kv" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/difficulty_selector.tscn" id="3_difficulty_selector"]
+[ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="4_free_camera"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -17,6 +20,7 @@ tonemap_mode = 2
 glow_enabled = true
 
 [node name="Main" type="Node3D"]
+script = ExtResource("1_main_script")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")
@@ -25,8 +29,15 @@ environment = SubResource("Environment_1")
 transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75, 0.433013, 0, 10, 0)
 shadow_enabled = true
 
-[node name="Slope" parent="." instance=ExtResource("1_slope")]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 0, -15)
+[node name="ProceduralSlope" parent="." instance=ExtResource("1_procedural_slope")]
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, -10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 350, 0)
+
+[node name="FreeCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 100, 100)
+script = ExtResource("4_free_camera")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="DifficultySelector" parent="UI" instance=ExtResource("3_difficulty_selector")]

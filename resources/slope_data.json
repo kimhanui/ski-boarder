@@ -1,0 +1,92 @@
+{
+  "terrain": {
+    "format": "heightmap",
+    "origin": [0, 0, 0],
+    "cell_size": 4.0,
+    "width_m": 400,
+    "length_m": 1500,
+    "heights": []
+  },
+  "path_spline": {
+    "type": "Curve3D",
+    "points": [
+      [0, 350, -20],
+      [5, 348, -50],
+      [8, 345, -100],
+      [12, 340, -150],
+      [10, 334, -200],
+      [5, 328, -250],
+      [-5, 321, -300],
+      [-12, 314, -350],
+      [-15, 306, -400],
+      [-18, 298, -450],
+      [-15, 289, -500],
+      [-10, 280, -550],
+      [-5, 270, -600],
+      [0, 259, -650],
+      [8, 248, -700],
+      [15, 236, -750],
+      [20, 224, -800],
+      [22, 211, -850],
+      [18, 198, -900],
+      [12, 184, -950],
+      [5, 170, -1000],
+      [0, 155, -1050],
+      [-5, 140, -1100],
+      [-8, 124, -1150],
+      [-10, 108, -1200],
+      [-8, 91, -1250],
+      [-5, 74, -1300],
+      [-2, 56, -1350],
+      [0, 38, -1400],
+      [0, 20, -1450],
+      [0, 0, -1500]
+    ],
+    "path_width_m": 5.0
+  },
+  "obstacles": [
+    {"type": "rock", "pos": [25, 345, -120], "scale": 1.5},
+    {"type": "tree", "pos": [-28, 342, -180], "scale": 2.0},
+    {"type": "rock", "pos": [30, 335, -240], "scale": 1.2},
+    {"type": "tree", "pos": [-32, 328, -290], "scale": 1.8},
+    {"type": "rock", "pos": [-35, 320, -350], "scale": 1.6},
+    {"type": "tree", "pos": [35, 310, -420], "scale": 2.2},
+    {"type": "rock", "pos": [-38, 295, -480], "scale": 1.4},
+    {"type": "tree", "pos": [32, 285, -540], "scale": 1.9},
+    {"type": "rock", "pos": [28, 275, -610], "scale": 1.3},
+    {"type": "tree", "pos": [-30, 265, -670], "scale": 2.1},
+    {"type": "rock", "pos": [40, 250, -730], "scale": 1.7},
+    {"type": "tree", "pos": [-35, 240, -790], "scale": 1.8},
+    {"type": "rock", "pos": [45, 225, -850], "scale": 1.5},
+    {"type": "tree", "pos": [-38, 212, -910], "scale": 2.0},
+    {"type": "rock", "pos": [35, 195, -970], "scale": 1.4},
+    {"type": "tree", "pos": [-32, 180, -1030], "scale": 1.9},
+    {"type": "rock", "pos": [30, 165, -1090], "scale": 1.6},
+    {"type": "tree", "pos": [-28, 148, -1150], "scale": 2.1},
+    {"type": "rock", "pos": [25, 130, -1210], "scale": 1.3},
+    {"type": "tree", "pos": [-25, 112, -1270], "scale": 1.8},
+    {"type": "rock", "pos": [22, 93, -1330], "scale": 1.5},
+    {"type": "tree", "pos": [-20, 75, -1390], "scale": 2.0},
+    {"type": "rock", "pos": [18, 55, -1450], "scale": 1.4}
+  ],
+  "checkpoints": [
+    {"pos": [0, 330, -300], "radius": 2.5},
+    {"pos": [-10, 270, -600], "radius": 2.5},
+    {"pos": [15, 210, -900], "radius": 2.5},
+    {"pos": [-8, 120, -1200], "radius": 2.5},
+    {"pos": [0, 10, -1480], "radius": 2.5}
+  ],
+  "meta": {
+    "slope_length_m": 1500,
+    "vertical_drop_m": 350,
+    "avg_angle_deg": 13,
+    "difficulty": "medium",
+    "theme": "frozen_morning"
+  },
+  "notes": [
+    "Path follows natural S-curve down the mountain with gradual turns for flow",
+    "Two major jump opportunities at z=-500 (15m drop) and z=-900 (18m drop) with smooth landings",
+    "Safe center line with obstacles pushed to shoulders; tight apex at checkpoint 2 offers risk/reward",
+    "Designed for speed-based FOV expansion on straight sections between z=-600 to z=-900"
+  ]
+}

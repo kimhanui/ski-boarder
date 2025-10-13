@@ -104,7 +104,7 @@ func _position_player_at_start(data: Dictionary, diff: String) -> void:
 		return
 
 	# Position player above start point with some clearance
-	# Move player slightly into the slope (negative Z) to ensure they're on terrain
+	# Move player slightly 	into the slope (negative Z) to ensure they're on terrain
 	var spawn_position = Vector3(start_point[0], start_point[1] + 5.0, start_point[2] - 10.0)
 	player.global_position = spawn_position
 

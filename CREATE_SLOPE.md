@@ -143,8 +143,19 @@ This ensures terrain exists both in front of and behind the start point. Player 
 **Key Technical Details**:
 1. **Heightmap Generation** (`_generate_heightmap()`):
    - Nested loops create width_cells × length_cells grid
-   - Base height: `350.0 * (1.0 - float(z) / length_cells)` for linear slope
-   - Noise layers: Multiple sin/cos waves for natural variation (3 frequencies)
+   - Base height: `350.0 * (1.0 - float(z) / length_cells)` for non-linear slope with varied sections
+   - **Varied slope sections** for realistic ski slope experience:
+     * 0-25%: Gentle starting area with smooth undulation (+10m variation)
+     * 25-40%: First steep drop - moderate descent (-30m)
+     * 40-55%: Gentle plateau with mild rolling (+5m variation)
+     * 55-70%: Second steep section (-25m)
+     * 70-100%: Final approach with gentle bumps (+8m variation)
+   - **Smooth multi-layer noise** for natural terrain:
+     * Large-scale features (mountains/valleys): freq 0.005, amplitude 8m
+     * Medium-scale features (hills/dips): 2 layers, freq 0.012, amplitude 4m
+     * Small-scale details (gentle bumps): 2 layers, freq 0.025, amplitude 2m
+     * Fixed phase offsets prevent spiky terrain
+     * Simplified frequency multipliers (0.5, 0.7, 0.8) for smooth transitions
    - Path carving: Reduces height near path points for smooth riding line
    - Z-offset: Critical 50m extension for terrain coverage
 
@@ -215,19 +226,44 @@ static func get_config(difficulty: String) -> Dictionary:
 - Make `slope_data_path` optional (procedural by default)
 - Allow JSON override for designer-crafted slopes
 
-**4. Procedural Noise Algorithm**:
+**4. Procedural Noise Algorithm** (CURRENT):
 ```gdscript
-# Difficulty-scaled terrain noise
-var noise_layers = difficulty_config.noise_amplitude
-var noise_val = 0.0
-noise_val += sin(world_x * 0.1) * cos(world_z * 0.05) * noise_layers[0]
-noise_val += sin(world_x * 0.05 + world_z * 0.03) * noise_layers[1]
-noise_val += sin(world_x * 0.2) * sin(world_z * 0.15) * noise_layers[2]
+# Smooth multi-layer noise for realistic terrain
+var noise_amplitudes = config.get("noise_amplitude", [8.0, 4.0, 2.0])
+var noise_freqs = config.get("noise_frequencies", [0.005, 0.012, 0.025])
 
-# Hard mode: add sharp bumps/dips
-if difficulty == "hard":
-    noise_val += sin(world_x * 0.3) * sin(world_z * 0.25) * 10.0
+# Create random seed for noise consistency
+var noise_seed = hash(str(width_m) + str(length_m))
+var rng = RandomNumberGenerator.new()
+rng.seed = noise_seed
+
+# Generate FIXED phase offsets once (not per-vertex!)
+var phase_offsets = []
+for i in range(6):
+    phase_offsets.append(rng.randf() * 6.28)
+
+var noise_val = 0.0
+
+# Large-scale terrain features (mountains, valleys) - very slow frequency
+noise_val += sin(world_x * noise_freqs[0] + phase_offsets[0]) * cos(world_z * noise_freqs[0] + phase_offsets[1]) * noise_amplitudes[0]
+
+# Medium-scale features (hills, dips) - smooth patterns, 2 layers
+noise_val += sin(world_x * noise_freqs[1] + world_z * noise_freqs[1] * 0.5 + phase_offsets[2]) * noise_amplitudes[1]
+noise_val += cos(world_x * noise_freqs[1] * 0.7 + world_z * noise_freqs[1] + phase_offsets[3]) * noise_amplitudes[1] * 0.6
+
+# Small-scale details (gentle bumps) - subtle variation, 2 layers
+noise_val += sin(world_x * noise_freqs[2] + world_z * noise_freqs[2] * 0.8 + phase_offsets[4]) * noise_amplitudes[2]
+noise_val += cos(world_x * noise_freqs[2] * 0.6 + world_z * noise_freqs[2] + phase_offsets[5]) * noise_amplitudes[2] * 0.4
+
+# Note: Micro-detail random noise removed to prevent spiky terrain
 ```
+
+**Key design decisions**:
+- **Fixed phase offsets**: Calculated once before vertex loop, ensures smooth continuous terrain
+- **Lower frequencies**: 0.005/0.012/0.025 create wide, gentle features (3x reduction from previous)
+- **Reduced amplitudes**: 8m/4m/2m prevent excessive height variation (50% reduction)
+- **Simplified multipliers**: 0.5, 0.6, 0.7, 0.8 avoid high-frequency artifacts
+- **No random micro-detail**: Removed per-vertex randomness that caused spiky appearance
 
 **5. Procedural Path Curvature**:
 ```gdscript
@@ -254,3 +290,88 @@ for i in range(num_segments):
 - **Balanced Progression**: Easy for learning, Hard for mastery
 - **Reproducible**: Optional seed for debugging/sharing specific runs
 - **Designer Override**: JSON still works for hand-crafted slopes
+
+## 10) Recent Updates (2025-10-14)
+
+### Update 1: Realistic Slope Sections Implementation (Morning)
+**Problem**: Original terrain had uniform linear slope with no variety. Lacked the natural flow of real ski slopes.
+
+**Solution**: Implemented varied slope sections that mimic real ski resort terrain:
+
+1. **Non-linear Base Slope** (`terrain_generator.gd:119-140`):
+   - Divided slope into 5 distinct sections based on `slope_progress` (0.0 to 1.0)
+   - Each section has unique characteristics:
+     * **Gentle starter** (0-25%): Smooth undulation for speed building
+     * **First steep drop** (25-40%): Moderate descent using quadratic falloff
+     * **Plateau rest area** (40-55%): Gentle rolling for catching breath
+     * **Second steep section** (55-70%): Another challenging descent
+     * **Jump zone** (70-100%): Gentle bumps for finale
+
+2. **Multi-layer Noise System** (`terrain_generator.gd:142-154`):
+   - 6 noise layers with different frequencies and amplitudes
+   - Attempted to create natural irregular terrain variation
+   - Used random phase offsets and frequency multipliers
+
+**Initial Results**:
+- Successfully generates terrain with varied sections
+- Creates gameplay pacing variation
+- However, terrain appeared too spiky/jagged (see Update 2)
+
+---
+
+### Update 2: Smooth Terrain Fix (Afternoon)
+**Problem**: Terrain appeared "spiky like thorns" - sharp, irregular peaks everywhere. Not smooth enough for skiing.
+
+**Root causes identified**:
+1. **Per-vertex random phase offsets**: `rng.randf() * 6.28` calculated inside vertex loop
+   - Destroyed continuity between adjacent vertices
+   - Created jagged, discontinuous surface
+2. **Too high frequencies**: 0.015/0.03/0.08 created tight, close-spaced bumps
+3. **Too large amplitudes**: 15m/8m/4m excessive height variation
+4. **Complex frequency multipliers**: 1.3, 1.7, 2.1 created high-frequency artifacts
+5. **Per-vertex random micro-detail**: `(rng.randf() - 0.5) * amplitude` added noise to every vertex
+6. **Excessive section variations**: 60m/45m drops too dramatic
+
+**Solution - 6 Key Changes**:
+
+| Aspect | Before (Spiky) | After (Smooth) | Improvement |
+|--------|----------------|----------------|-------------|
+| **Phase Offsets** | `rng.randf()` per vertex | Fixed array, calculated once | Continuous terrain |
+| **Frequencies** | [0.015, 0.03, 0.08] | [0.005, 0.012, 0.025] | 3x wider features |
+| **Amplitudes** | [15.0, 8.0, 4.0] | [8.0, 4.0, 2.0] | 50% reduction |
+| **Freq Multipliers** | 1.3, 1.7, 2.1 | 0.5, 0.6, 0.7, 0.8 | Simplified, gentler |
+| **Micro-detail** | ±0.6m random | Removed entirely | No vertex noise |
+| **Section Heights** | ±60m, ±45m | ±30m, ±25m | 50% reduction |
+
+**Code Changes** (`terrain_generator.gd:88-154`):
+
+```gdscript
+# CRITICAL FIX: Calculate phase offsets ONCE, not per-vertex
+var phase_offsets = []
+for i in range(6):
+    phase_offsets.append(rng.randf() * 6.28)
+
+# Use FIXED offsets in noise calculation
+noise_val += sin(world_x * noise_freqs[0] + phase_offsets[0]) * ...  # Not rng.randf()!
+```
+
+**DifficultyConfig Updates** (`difficulty_config.gd`):
+
+```gdscript
+Easy:   noise_amplitude=[6.0, 3.0, 1.5],  noise_frequencies=[0.003, 0.008, 0.018]
+Medium: noise_amplitude=[8.0, 4.0, 2.0],  noise_frequencies=[0.005, 0.012, 0.025]
+Hard:   noise_amplitude=[12.0, 6.0, 3.0], noise_frequencies=[0.008, 0.018, 0.035]
+```
+
+**Results**:
+- Terrain now smooth and ski-able
+- Wide, gentle hills and valleys (not tight bumps)
+- Natural mountain appearance maintained
+- No spiky artifacts
+- Successfully tested with 37,500 vertices
+
+**Lessons Learned**:
+- Random values must be fixed outside vertex loops for continuous surfaces
+- Lower frequencies (< 0.01) essential for natural-looking terrain
+- Per-vertex randomness destroys mesh smoothness
+- Moderation in amplitude critical for playable slopes

@@ -87,25 +87,71 @@ static func _generate_heightmap(terrain_data: Dictionary, path_data: Dictionary,
 
 	# Get noise parameters from config or use defaults
 	var vertical_drop = config.get("vertical_drop", 350.0)
-	var noise_amplitudes = config.get("noise_amplitude", [15.0, 8.0, 4.0])
-	var noise_freqs = config.get("noise_frequencies", [0.1, 0.05, 0.2])
+	var noise_amplitudes = config.get("noise_amplitude", [8.0, 4.0, 2.0])
+	var noise_freqs = config.get("noise_frequencies", [0.005, 0.012, 0.025])
 
 	# Generate heightmap with natural terrain variation
 	# Start terrain slightly ahead (positive Z) of origin to ensure coverage
 	var z_offset = 50.0  # meters of terrain before start point
+
+	# Create random seed for irregular noise (based on terrain data for consistency)
+	var noise_seed = hash(str(width_m) + str(length_m))
+	var rng = RandomNumberGenerator.new()
+	rng.seed = noise_seed
+
+	# Generate FIXED random phase offsets for each noise layer (not per-vertex!)
+	var phase_offsets = []
+	for i in range(6):
+		phase_offsets.append(rng.randf() * 6.28)
+
 	for x in range(width_cells):
 		var row = []
 		for z in range(length_cells):
 			var world_x = origin[0] + x * cell_size - width_m / 2.0
 			var world_z = origin[2] + z_offset - z * cell_size
 
-			# Base height: linear slope from top to bottom (scaled by vertical_drop)
-			var base_height = vertical_drop * (1.0 - float(z) / length_cells)
+			# Progress down the slope (0.0 at top, 1.0 at bottom)
+			var slope_progress = float(z) / length_cells
 
-			# Add natural terrain variation using noise (difficulty-scaled)
-			var noise_val = sin(world_x * noise_freqs[0]) * cos(world_z * (noise_freqs[0] * 0.5)) * noise_amplitudes[0]
-			noise_val += sin(world_x * noise_freqs[1] + world_z * (noise_freqs[1] * 0.6)) * noise_amplitudes[1]
-			noise_val += sin(world_x * noise_freqs[2]) * sin(world_z * (noise_freqs[2] * 0.75)) * noise_amplitudes[2]
+			# Base height: non-linear slope with varied sections
+			var base_height = vertical_drop * (1.0 - slope_progress)
+
+			# Add slope sections: gentle slopes, steep drops, and plateaus
+			# Upper section (0.0 - 0.25): Gentle starting area
+			if slope_progress < 0.25:
+				base_height += sin(slope_progress * PI * 2.0) * 10.0  # Smooth undulation
+
+			# Mid-upper section (0.25 - 0.40): First steep drop
+			elif slope_progress < 0.40:
+				var drop_progress = (slope_progress - 0.25) / 0.15
+				base_height -= drop_progress * drop_progress * 30.0  # Moderate descent
+
+			# Mid section (0.40 - 0.55): Gentle plateau
+			elif slope_progress < 0.55:
+				base_height += sin((slope_progress - 0.40) * PI * 3.0) * 5.0  # Mild rolling
+
+			# Mid-lower section (0.55 - 0.70): Second steep section
+			elif slope_progress < 0.70:
+				var drop_progress = (slope_progress - 0.55) / 0.15
+				base_height -= drop_progress * drop_progress * 25.0  # Moderate descent
+
+			# Lower section (0.70 - 1.0): Final approach with jumps
+			else:
+				base_height += sin((slope_progress - 0.70) * PI * 3.0) * 8.0  # Gentle bumps
+
+			# Add smooth natural terrain variation using multi-octave noise
+			var noise_val = 0.0
+
+			# Large-scale terrain features (mountains, valleys) - very slow frequency
+			noise_val += sin(world_x * noise_freqs[0] + phase_offsets[0]) * cos(world_z * noise_freqs[0] + phase_offsets[1]) * noise_amplitudes[0]
+
+			# Medium-scale features (hills, dips) - smooth patterns
+			noise_val += sin(world_x * noise_freqs[1] + world_z * noise_freqs[1] * 0.5 + phase_offsets[2]) * noise_amplitudes[1]
+			noise_val += cos(world_x * noise_freqs[1] * 0.7 + world_z * noise_freqs[1] + phase_offsets[3]) * noise_amplitudes[1] * 0.6
+
+			# Small-scale details (gentle bumps) - subtle variation
+			noise_val += sin(world_x * noise_freqs[2] + world_z * noise_freqs[2] * 0.8 + phase_offsets[4]) * noise_amplitudes[2]
+			noise_val += cos(world_x * noise_freqs[2] * 0.6 + world_z * noise_freqs[2] + phase_offsets[5]) * noise_amplitudes[2] * 0.4
 
 			# Carve path depression
 			var closest_dist = INF

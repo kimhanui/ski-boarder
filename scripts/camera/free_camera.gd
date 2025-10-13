@@ -54,9 +54,9 @@ func _physics_process(delta: float) -> void:
 	var input_dir = Vector3.ZERO
 
 	if Input.is_action_pressed("move_forward"):
-		input_dir.z -= 1
+		input_dir.z += 1  # Fixed: was inverted
 	if Input.is_action_pressed("move_back"):
-		input_dir.z += 1
+		input_dir.z -= 1  # Fixed: was inverted
 	if Input.is_action_pressed("move_left"):
 		input_dir.x -= 1
 	if Input.is_action_pressed("move_right"):
@@ -88,6 +88,19 @@ func _physics_process(delta: float) -> void:
 func activate() -> void:
 	_is_active = true
 	current = true
+
+	# Position camera to face player
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var player_pos = player.global_position
+		# Position camera behind and above player
+		global_position = player_pos + Vector3(0, 5, 10)
+		# Look at player
+		look_at(player_pos, Vector3.UP)
+		# Update rotation variables to match
+		_rotation_y = rotation.y
+		_rotation_x = rotation.x
+
 	print("Free camera activated - Right-click and drag to rotate, WASD to move, Space/Ctrl for up/down, Shift for speed")
 
 

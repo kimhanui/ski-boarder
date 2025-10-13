@@ -7,8 +7,8 @@ static func get_config(difficulty: String) -> Dictionary:
 	match difficulty.to_lower():
 		"easy":
 			return {
-				"noise_amplitude": [5.0, 3.0, 1.5],
-				"noise_frequencies": [0.08, 0.04, 0.15],  # Lower = smoother
+				"noise_amplitude": [6.0, 3.0, 1.5],
+				"noise_frequencies": [0.003, 0.008, 0.018],  # Very smooth
 				"vertical_drop": 200.0,
 				"slope_length": 1200.0,
 				"path_width": 8.0,
@@ -22,8 +22,8 @@ static func get_config(difficulty: String) -> Dictionary:
 			}
 		"hard":
 			return {
-				"noise_amplitude": [20.0, 12.0, 6.0],
-				"noise_frequencies": [0.15, 0.08, 0.25],  # Higher = rougher
+				"noise_amplitude": [12.0, 6.0, 3.0],
+				"noise_frequencies": [0.008, 0.018, 0.035],  # More variation
 				"vertical_drop": 500.0,
 				"slope_length": 2000.0,
 				"path_width": 3.0,
@@ -37,8 +37,8 @@ static func get_config(difficulty: String) -> Dictionary:
 			}
 		_:  # "medium" (default)
 			return {
-				"noise_amplitude": [10.0, 6.0, 3.0],
-				"noise_frequencies": [0.1, 0.05, 0.2],
+				"noise_amplitude": [8.0, 4.0, 2.0],
+				"noise_frequencies": [0.005, 0.012, 0.025],  # Smooth and wide
 				"vertical_drop": 350.0,
 				"slope_length": 1500.0,
 				"path_width": 5.0,

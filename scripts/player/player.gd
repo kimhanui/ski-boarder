@@ -9,17 +9,24 @@ const GRAVITY = 9.8
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
 @onready var camera_first_person = $Camera3D_FirstPerson
+@onready var camera_free = $Camera3D_Free
 
 var is_first_person = false
+var is_free_camera = false
 
 
 func _ready() -> void:
 	# Set initial camera
 	camera_third_person.current = true
 	camera_first_person.current = false
+	camera_free.current = false
 
 
 func _physics_process(delta: float) -> void:
+	# Skip player physics when in free camera mode
+	if is_free_camera:
+		return
+
 	# Add gravity
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
@@ -59,8 +66,22 @@ func _physics_process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Toggle camera
-	if event.is_action_pressed("toggle_camera"):
+	# Toggle free camera with Tab
+	if event.is_action_pressed("ui_focus_next"):  # Tab key
+		is_free_camera = !is_free_camera
+
+		if is_free_camera:
+			camera_free.activate()
+			camera_third_person.current = false
+			camera_first_person.current = false
+		else:
+			camera_free.deactivate()
+			# Restore previous camera state
+			camera_third_person.current = !is_first_person
+			camera_first_person.current = is_first_person
+
+	# Toggle between 1st and 3rd person (F1 key) - only when not in free camera
+	if event.is_action_pressed("toggle_camera") and not is_free_camera:
 		is_first_person = !is_first_person
 		camera_third_person.current = !is_first_person
 		camera_first_person.current = is_first_person

@@ -1,12 +1,48 @@
-[gd_scene load_steps=7 format=3 uid="uid://c6xj3q8pxr7kv"]
+[gd_scene load_steps=8 format=3 uid="uid://c6xj3q8pxr7kv"]
 
 [ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/player/player.gd" id="1_player_script"]
+[ext_resource type="Script" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 height = 1.8
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
 height = 1.8
+
+[sub_resource type="SphereMesh" id="SphereMesh_head"]
+radius = 0.3
+height = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_skin"]
+albedo_color = Color(1, 0.9, 0.8, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.4, 0.4, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jacket"]
+albedo_color = Color(0.2, 0.5, 0.9, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_leg"]
+top_radius = 0.08
+bottom_radius = 0.1
+height = 0.4
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pants"]
+albedo_color = Color(0.15, 0.15, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ski"]
+size = Vector3(0.15, 0.05, 1.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ski"]
+albedo_color = Color(0.9, 0.1, 0.1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pole"]
+top_radius = 0.015
+bottom_radius = 0.015
+height = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pole"]
+albedo_color = Color(0.3, 0.3, 0.3, 1)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_snow"]
 direction = Vector3(0, -1, -1)
@@ -16,11 +52,15 @@ initial_velocity_max = 4.0
 gravity = Vector3(0, -2, 0)
 
 [sub_resource type="SphereMesh" id="SphereMesh_eye"]
-radius = 0.08
-height = 0.16
+radius = 0.1
+height = 0.2
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_mouth"]
+radius = 0.06
+height = 0.12
 
 [node name="Player" type="CharacterBody3D"]
 collision_mask = 2
@@ -29,8 +69,49 @@ script = ExtResource("1_player_script")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("CapsuleShape3D_1")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("CapsuleMesh_1")
+[node name="Body" type="Node3D" parent="."]
+
+[node name="Head" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+mesh = SubResource("SphereMesh_head")
+surface_material_override/0 = SubResource("StandardMaterial3D_skin")
+
+[node name="UpperBody" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
+
+[node name="LeftLeg" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, -0.12, -0.35, -0.1)
+mesh = SubResource("CylinderMesh_leg")
+surface_material_override/0 = SubResource("StandardMaterial3D_pants")
+
+[node name="RightLeg" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0.12, -0.35, -0.1)
+mesh = SubResource("CylinderMesh_leg")
+surface_material_override/0 = SubResource("StandardMaterial3D_pants")
+
+[node name="Equipment" type="Node3D" parent="."]
+
+[node name="SkiLeft" type="MeshInstance3D" parent="Equipment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, -0.6, 0)
+mesh = SubResource("BoxMesh_ski")
+surface_material_override/0 = SubResource("StandardMaterial3D_ski")
+
+[node name="SkiRight" type="MeshInstance3D" parent="Equipment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, -0.6, 0)
+mesh = SubResource("BoxMesh_ski")
+surface_material_override/0 = SubResource("StandardMaterial3D_ski")
+
+[node name="PoleLeft" type="MeshInstance3D" parent="Equipment"]
+transform = Transform3D(0.707107, 0.612372, 0.353553, 0, 0.5, -0.866025, -0.707107, 0.612372, 0.353553, -0.3, 0.1, -0.2)
+mesh = SubResource("CylinderMesh_pole")
+surface_material_override/0 = SubResource("StandardMaterial3D_pole")
+
+[node name="PoleRight" type="MeshInstance3D" parent="Equipment"]
+transform = Transform3D(0.707107, -0.612372, -0.353553, 0, 0.5, -0.866025, 0.707107, 0.612372, 0.353553, 0.3, 0.1, -0.2)
+mesh = SubResource("CylinderMesh_pole")
+surface_material_override/0 = SubResource("StandardMaterial3D_pole")
 
 [node name="Camera3D_ThirdPerson" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 3, 5)
@@ -39,22 +120,28 @@ current = true
 [node name="Camera3D_FirstPerson" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 
+[node name="Camera3D_Free" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 8, 10)
+script = ExtResource("2_free_camera_script")
+
 [node name="SnowParticles" type="GPUParticles3D" parent="."]
 amount = 50
 lifetime = 2.0
 process_material = SubResource("ParticleProcessMaterial_snow")
 
-[node name="LeftEye" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.6, -0.4)
+[node name="Face" type="Node3D" parent="Body/Head"]
+
+[node name="LeftEye" type="MeshInstance3D" parent="Body/Head/Face"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.08, -0.28)
 mesh = SubResource("SphereMesh_eye")
 surface_material_override/0 = SubResource("StandardMaterial3D_eye")
 
-[node name="RightEye" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, 0.6, -0.4)
+[node name="RightEye" type="MeshInstance3D" parent="Body/Head/Face"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.08, -0.28)
 mesh = SubResource("SphereMesh_eye")
 surface_material_override/0 = SubResource("StandardMaterial3D_eye")
 
-[node name="Mouth" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.3, 0, 0, 0, 1, 0, 0.3, -0.42)
-mesh = SubResource("SphereMesh_eye")
+[node name="Mouth" type="MeshInstance3D" parent="Body/Head/Face"]
+transform = Transform3D(1, 0, 0, 0, 0.4, 0, 0, 0, 1, 0, -0.08, -0.29)
+mesh = SubResource("SphereMesh_mouth")
 surface_material_override/0 = SubResource("StandardMaterial3D_eye")

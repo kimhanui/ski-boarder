@@ -13,6 +13,7 @@ const ANIMATION_SPEED = 10.0  # how fast animations interpolate
 
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
+@onready var camera_third_person_front = $Camera3D_ThirdPersonFront
 @onready var camera_first_person = $Camera3D_FirstPerson
 @onready var camera_free = $Camera3D_Free
 
@@ -23,8 +24,14 @@ const ANIMATION_SPEED = 10.0  # how fast animations interpolate
 @onready var left_eye = $Body/Head/LeftEye
 @onready var right_eye = $Body/Head/RightEye
 
-var is_first_person = false
-var _player_cameras_active = true  # Track if player cameras are in control
+# UI references
+@onready var camera_mode_label = $UI/CameraModeLabel
+
+# Camera mode: 0 = 3rd person back, 1 = 3rd person front, 2 = 1st person, 3 = free camera
+var camera_mode = 0
+
+# Signal for UI updates
+signal camera_mode_changed(mode_name: String)
 
 # Animation state
 var current_tilt = 0.0  # Current Z-axis rotation (roll)
@@ -37,18 +44,20 @@ func _ready() -> void:
 	# Add to player group for free camera to find
 	add_to_group("player")
 
-	# Set initial camera
-	camera_third_person.current = true
-	camera_first_person.current = false
-	camera_free.current = false
+	# Connect camera mode signal to UI update
+	camera_mode_changed.connect(_on_camera_mode_changed)
 
-	# Hide eyes in first person initially (they're visible in 3rd person)
-	_update_eye_visibility()
+	# Set initial camera mode
+	camera_mode = 0
+	_apply_camera_mode()
+
+	# Update UI with initial camera mode
+	_on_camera_mode_changed(_get_camera_mode_name())
 
 
 func _physics_process(delta: float) -> void:
-	# Skip player physics when in free camera mode
-	if not _player_cameras_active:
+	# Only disable player control in free camera mode
+	if camera_mode == 3:
 		return
 
 	# Add gravity
@@ -108,35 +117,64 @@ func _physics_process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Toggle free camera with Tab
-	if event.is_action_pressed("ui_focus_next"):  # Tab key
-		_player_cameras_active = !_player_cameras_active
+	# Cycle through camera modes with F1 key
+	# Order: 3rd person back → 3rd person front → 1st person → free camera
+	if event.is_action_pressed("toggle_camera"):
+		camera_mode = (camera_mode + 1) % 4
+		_apply_camera_mode()
+		camera_mode_changed.emit(_get_camera_mode_name())
 
-		if not _player_cameras_active:
-			camera_free.activate()
-			camera_third_person.current = false
+
+## Apply camera mode (0: 3rd back, 1: 3rd front, 2: 1st person, 3: free camera)
+func _apply_camera_mode() -> void:
+	match camera_mode:
+		0:  # Third person back
+			camera_third_person.current = true
+			camera_third_person_front.current = false
 			camera_first_person.current = false
-		else:
 			camera_free.deactivate()
-			# Restore previous camera state
-			camera_third_person.current = !is_first_person
-			camera_first_person.current = is_first_person
+		1:  # Third person front
+			camera_third_person.current = false
+			camera_third_person_front.current = true
+			camera_first_person.current = false
+			camera_free.deactivate()
+		2:  # First person
+			camera_third_person.current = false
+			camera_third_person_front.current = false
+			camera_first_person.current = true
+			camera_free.deactivate()
+		3:  # Free camera
+			camera_third_person.current = false
+			camera_third_person_front.current = false
+			camera_first_person.current = false
+			camera_free.activate()
 
-	# Toggle between 1st and 3rd person (F1 key) - only when not in free camera
-	if event.is_action_pressed("toggle_camera") and _player_cameras_active:
-		is_first_person = !is_first_person
-		camera_third_person.current = !is_first_person
-		camera_first_person.current = is_first_person
-		_update_eye_visibility()
+	_update_eye_visibility()
+
+
+## Get camera mode name for UI display
+func _get_camera_mode_name() -> String:
+	match camera_mode:
+		0:
+			return "3인칭 (뒤)"
+		1:
+			return "3인칭 (앞)"
+		2:
+			return "1인칭"
+		3:
+			return "프리 카메라"
+		_:
+			return "알 수 없음"
 
 
 ## Update eye visibility based on camera mode
 func _update_eye_visibility() -> void:
-	# Hide eyes in first-person view (they're too close to camera)
-	# Show eyes in third-person view
+	# Hide eyes in first-person and free camera views
+	# Show eyes in third-person views
 	if left_eye and right_eye:
-		left_eye.visible = !is_first_person
-		right_eye.visible = !is_first_person
+		var hide_eyes = (camera_mode in [2, 3])
+		left_eye.visible = !hide_eyes
+		right_eye.visible = !hide_eyes
 
 
 ## Update ski stance for braking (pizza/wedge position)
@@ -162,18 +200,12 @@ func _update_ski_stance(is_braking: bool, delta: float) -> void:
 	var new_ski_rot = lerp(current_ski_rot, target_ski_rotation_x, ANIMATION_SPEED * delta)
 
 	# Left ski rotates right (positive), right ski rotates left (negative)
+	# This creates a reverse wedge shape with ski tails pointing inward
 	left_ski.rotation_degrees.y = new_ski_rot
 	right_ski.rotation_degrees.y = -new_ski_rot
 
 
-## Called when switching to/from free camera
-func set_cameras_active(active: bool) -> void:
-	_player_cameras_active = active
-	if not active:
-		# Deactivate both player cameras
-		camera_third_person.current = false
-		camera_first_person.current = false
-	else:
-		# Restore the camera that was active
-		camera_third_person.current = not is_first_person
-		camera_first_person.current = is_first_person
+## Update camera mode label when camera changes
+func _on_camera_mode_changed(mode_name: String) -> void:
+	if camera_mode_label:
+		camera_mode_label.text = "카메라: " + mode_name

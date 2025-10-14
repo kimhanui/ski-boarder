@@ -256,11 +256,14 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	var array_mesh = ArrayMesh.new()
 	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
-	# Create material with snow-like properties
+	# Create material with sparkling snow properties
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.95, 0.95, 1.0)
-	material.roughness = 0.7  # Slightly rough for realistic snow
+	material.albedo_color = Color(1.0, 1.0, 1.0)  # Pure white for bright snow
+	material.roughness = 0.3  # Smooth surface for reflective sparkle
 	material.metallic = 0.0
+	material.emission_enabled = true
+	material.emission = Color(0.15, 0.15, 0.2)  # Subtle blue-white glow
+	material.emission_energy_multiplier = 0.5  # Gentle emission
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	array_mesh.surface_set_material(0, material)
 

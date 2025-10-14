@@ -378,6 +378,66 @@ Hard:   noise_amplitude=[12.0, 6.0, 3.0], noise_frequencies=[0.008, 0.018, 0.035
 
 ---
 
+### Update 3: Sparkling Snow Material (2025-10-15)
+**Problem**: Terrain looked dull and didn't capture the luminous, sparkling quality of real snow under sunlight.
+
+**Goal**: Make snow terrain sparkle and glow like real snow on a sunny winter day.
+
+**Solution**: Enhanced StandardMaterial3D properties for snow surface:
+
+**Material Changes** (`terrain_generator.gd:259-268`):
+
+| Property | Before | After | Effect |
+|----------|--------|-------|--------|
+| **albedo_color** | `(0.95, 0.95, 1.0)` | `(1.0, 1.0, 1.0)` | Pure white for brighter snow |
+| **roughness** | `0.7` | `0.3` | Smooth surface for reflective sparkle |
+| **emission_enabled** | `false` | `true` | Enable self-illumination |
+| **emission** | N/A | `Color(0.15, 0.15, 0.2)` | Subtle blue-white glow |
+| **emission_energy_multiplier** | N/A | `0.5` | Gentle luminance intensity |
+
+**Code Implementation**:
+```gdscript
+# Create material with sparkling snow properties
+var material = StandardMaterial3D.new()
+material.albedo_color = Color(1.0, 1.0, 1.0)  # Pure white for bright snow
+material.roughness = 0.3  # Smooth surface for reflective sparkle
+material.metallic = 0.0
+material.emission_enabled = true
+material.emission = Color(0.15, 0.15, 0.2)  # Subtle blue-white glow
+material.emission_energy_multiplier = 0.5  # Gentle emission
+material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+array_mesh.surface_set_material(0, material)
+```
+
+**Visual Results**:
+- ✨ **Sparkle Effect**: Lower roughness (0.3) creates smooth, reflective surface that catches light
+- 💎 **Bright Snow**: Pure white albedo maximizes light reflection
+- 🌟 **Self-Illumination**: Subtle emission simulates snow's natural luminosity
+- ❄️ **Cold Atmosphere**: Blue-white emission tint conveys winter coldness
+- 🏔️ **Natural Glow**: Gentle emission energy (0.5) prevents over-brightness
+
+**Lighting Integration**:
+Works in conjunction with DirectionalLight3D settings (from earlier update):
+- `light_energy = 1.5` - Strong sunlight
+- `shadow_enabled = true` - Depth and contrast
+- `shadow_opacity = 0.6` - Soft shadows
+
+**Technical Notes**:
+- Emission is view-independent, provides consistent glow from all angles
+- Low roughness increases specular highlights under directional light
+- Per-pixel shading ensures smooth light falloff across terrain
+- No performance impact - material properties are GPU-efficient
+
+**Design Rationale**:
+Real snow sparkles due to ice crystal reflection and scattering. The combination of:
+1. High albedo (brightness)
+2. Low roughness (smoothness)
+3. Subtle emission (self-glow)
+
+...simulates this natural phenomenon in a low-poly, stylized way that matches the game's aesthetic.
+
+---
+
 ## 11) Player Movement Implementation
 
 ### Architecture

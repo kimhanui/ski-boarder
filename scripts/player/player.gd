@@ -14,6 +14,7 @@ const ANIMATION_SPEED = 10.0  # how fast animations interpolate
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
 @onready var camera_first_person = $Camera3D_FirstPerson
+@onready var camera_free = $Camera3D_Free
 
 # Body parts references
 @onready var body = $Body
@@ -39,12 +40,17 @@ func _ready() -> void:
 	# Set initial camera
 	camera_third_person.current = true
 	camera_first_person.current = false
+	camera_free.current = false
 
 	# Hide eyes in first person initially (they're visible in 3rd person)
 	_update_eye_visibility()
 
 
 func _physics_process(delta: float) -> void:
+	# Skip player physics when in free camera mode
+	if not _player_cameras_active:
+		return
+
 	# Add gravity
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
@@ -102,7 +108,21 @@ func _physics_process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Toggle camera (only when player cameras are active)
+	# Toggle free camera with Tab
+	if event.is_action_pressed("ui_focus_next"):  # Tab key
+		_player_cameras_active = !_player_cameras_active
+
+		if not _player_cameras_active:
+			camera_free.activate()
+			camera_third_person.current = false
+			camera_first_person.current = false
+		else:
+			camera_free.deactivate()
+			# Restore previous camera state
+			camera_third_person.current = !is_first_person
+			camera_first_person.current = is_first_person
+
+	# Toggle between 1st and 3rd person (F1 key) - only when not in free camera
 	if event.is_action_pressed("toggle_camera") and _player_cameras_active:
 		is_first_person = !is_first_person
 		camera_third_person.current = !is_first_person

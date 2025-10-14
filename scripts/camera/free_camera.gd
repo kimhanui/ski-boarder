@@ -19,7 +19,6 @@ func _ready() -> void:
 	global_position = initial_position
 	_rotation_x = -0.5  # Look down slightly
 	_update_camera_rotation()
-
 	# Start inactive
 	current = false
 

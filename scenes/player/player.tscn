@@ -1,6 +1,7 @@
 [gd_scene load_steps=12 format=3 uid="uid://c6xj3q8pxr7kv"]
 
 [ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/player/player.gd" id="1_player_script"]
+[ext_resource type="Script" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 height = 1.8
@@ -147,6 +148,10 @@ current = true
 
 [node name="Camera3D_FirstPerson" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+
+[node name="Camera3D_Free" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 8, 10)
+script = ExtResource("2_free_camera_script")
 
 [node name="SnowParticles" type="GPUParticles3D" parent="."]
 amount = 50

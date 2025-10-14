@@ -1,0 +1,101 @@
+{
+  "version": "1.0",
+  "purpose": "Low-poly, modular ski player character for a casual game. Two variants: human and bipedal cat. Designed for easy item swapping (hat, top, bottom, skis, poles).",
+  "common_constraints": {
+    "style": "simple, cute, slightly cartoonish; game-ready; low-poly; clean topology",
+    "proportions": "chibi; head ~1/3 of total height; gender-neutral silhouette",
+    "modularity": "All swappable items MUST be separate meshes with clear pivots",
+    "separate_meshes": [
+      "head",
+      "upper_body",
+      "lower_body",
+      "hat",
+      "top_jacket",
+      "bottom_pants",
+      "skis_left",
+      "skis_right",
+      "pole_left",
+      "pole_right"
+    ],
+    "materials": "flat/neutral base colors per mesh; no baked textures; minimal material count",
+    "polycount": "target 3,000–8,000 faces total",
+    "pose": "simple ski stance; knees slightly bent; arms holding poles; facing forward",
+    "rig": "optional simple skeleton; joints aligned; no complex constraints required",
+    "export": {
+      "formats": ["FBX", "GLB"],
+      "scale": "meters",
+      "up_axis": "Y",
+      "forward_axis": "Z",
+      "origin": "centered at feet; pivot at ground contact",
+      "deliver_uvs": "optional single UV set per mesh (no textures needed)"
+    },
+    "topology": "manifold, no ngons; minimal seams; consistent normals; smooth shading",
+    "naming": "use snake_case; prefix variant (human_ / cat_) for unique parts"
+  },
+  "references": [
+    "Fall Guys (silhouette & simplicity)",
+    "Roblox/Animal Crossing (casual, friendly look)",
+    "Low-poly skiing game mascots"
+  ],
+  "variants": [
+    {
+      "id": "human",
+      "title": "Player — Human Skier",
+      "prompt": "Create a low-poly 3D character model of a casual human skier with clearly separated face, upper body, and lower body for modular customization. Style is simple, cute, and lightly cartoonish. Use chibi proportions (head ~1/3 height). Place the character in a light ski stance: knees slightly bent, skis on both feet, holding two poles.",
+      "extra_meshes": [],
+      "face_spec": "minimal features; simple oval eyes, small mouth; no realistic detail",
+      "silhouette_notes": "rounded head; compact torso; clean, readable limbs",
+      "strict_requirements": {
+        "separate_meshes_override": [
+          "human_head",
+          "human_upper_body",
+          "human_lower_body",
+          "human_hat",
+          "human_top_jacket",
+          "human_bottom_pants",
+          "human_ski_left",
+          "human_ski_right",
+          "human_pole_left",
+          "human_pole_right"
+        ],
+        "do_not_include": ["hair_cards", "high-frequency folds", "photoreal textures"]
+      }
+    },
+    {
+      "id": "cat",
+      "title": "Player — Bipedal Cat Skier",
+      "prompt": "Create a low-poly 3D model of a bipedal cat skier with a simple, cute cartoon style. The cat stands on two legs with clear separation between face, upper body, and lower body for modular customization. Use chibi proportions (head ~1/3 height). Pose in a light ski stance: knees slightly bent, skis on both feet, holding two poles.",
+      "extra_meshes": ["tail", "ears (integrated into head mesh if preferred)"],
+      "face_spec": "simple oval eyes, tiny nose, small mouth; friendly expression",
+      "silhouette_notes": "round head with small cat ears; short body; small tail",
+      "strict_requirements": {
+        "separate_meshes_override": [
+          "cat_head",
+          "cat_upper_body",
+          "cat_lower_body",
+          "cat_hat",
+          "cat_top_jacket",
+          "cat_bottom_pants",
+          "cat_ski_left",
+          "cat_ski_right",
+          "cat_pole_left",
+          "cat_pole_right",
+          "cat_tail"
+        ],
+        "do_not_include": ["realistic fur", "hair_cards", "photoreal textures"]
+      }
+    }
+  ],
+  "qa_checklist": [
+    "All swappable items are separate meshes and properly named",
+    "Pivot/origin at ground; character stands at (0,0,0)",
+    "Polycount within 3k–8k faces",
+    "No textures; minimal material slots",
+    "Clean topology; no ngons; correct normals",
+    "Readable chibi proportions; friendly silhouette",
+    "Skis and poles aligned to world axes; easy to retarget/animate",
+    "FBX/GLB export opens correctly in Unity/Unreal/DCC"
+  ],
+  "delivery_notes": "Provide one FBX or GLB per variant; place all meshes at world origin; freeze transforms; include simple T- or A-pose file if rigged (optional)."
+}
+

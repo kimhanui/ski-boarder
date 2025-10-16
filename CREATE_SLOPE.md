@@ -440,197 +440,92 @@ Real snow sparkles due to ice crystal reflection and scattering. The combination
 
 ## 11) Player Movement Implementation
 
-### Architecture
-**File**: `scripts/player/player.gd`
-**Node**: CharacterBody3D with collision detection
+**File**: `scripts/player/player.gd` (CharacterBody3D)
 
-### Core Movement System
+### Core Control Scheme
 
-**1. Physics Constants** (lines 4-7):
-```gdscript
-const SPEED = 8.0              # Base horizontal movement speed
-const TURN_SPEED = 3.0         # Turning/steering speed
-const JUMP_VELOCITY = 6.0      # Vertical jump impulse
-const GRAVITY = 9.8            # Gravity acceleration
-```
+**Rotation-Based Movement** (not strafe):
+- **Left/Right (A/D)**: Y-axis rotation (turning) only - no lateral movement
+- **Forward (W)**: Accelerate in facing direction
+- **Back (S)**: Brake to stop (does not reverse)
 
-**2. Main Physics Loop** (`_physics_process(delta)`, lines 58-112):
+### Key Systems
 
-**Control Lock Logic**:
-```gdscript
-# Only disable player control in free camera mode (mode 3)
-if camera_mode == 3:
-    return
-```
-- **Modes 0-2** (3rd person back, 3rd person front, 1st person): Player **can move**
-- **Mode 3** (free camera): Player **cannot move** (camera inspection mode)
+#### 1. Slope-Based Gradual Acceleration
 
-**Gravity Application** (lines 64-65):
-```gdscript
-if not is_on_floor():
-    velocity.y -= GRAVITY * delta
-```
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `MAX_SPEED` | 15.0 | Maximum forward speed |
+| `TURN_SPEED` | 1.5 | Rotation speed (reduced for control) |
+| `ACCELERATION` | 5.0 | Base acceleration on flat ground |
+| `SLOPE_ACCELERATION_FACTOR` | 0.5 | Slope angle multiplier |
+| `FRICTION` | 2.0 | Natural slowdown when coasting |
 
-**Jump Handling** (lines 68-69):
-```gdscript
-if Input.is_action_just_pressed("jump") and is_on_floor():
-    velocity.y = JUMP_VELOCITY
-```
+**Acceleration Logic** (`player.gd:114-133`):
+- Calculate slope angle from `get_floor_normal()`
+- Steeper slopes = faster acceleration
+- Speed builds gradually from 0 to `MAX_SPEED`
+- Forward key required to accelerate (no passive downhill)
 
-**Input Processing** (lines 72-73):
-```gdscript
-var input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-var direction = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
-```
+#### 2. Low-Speed Skating Animation
 
-**Movement Application** (lines 104-109):
-```gdscript
-if direction:
-    velocity.x = direction.x * SPEED
-    velocity.z = direction.z * SPEED
-else:
-    velocity.x = move_toward(velocity.x, 0, SPEED * delta)
-    velocity.z = move_toward(velocity.z, 0, SPEED * delta)
-```
+**When**: `current_speed < 4.0` and moving forward
+**Effect**: Alternating push motion
 
-**Physics Update** (line 112):
-```gdscript
-move_and_slide()  # CharacterBody3D built-in collision-aware movement
-```
+| Phase | Left Leg | Right Leg | Left Ski Angle | Right Ski Angle |
+|-------|----------|-----------|----------------|-----------------|
+| 0.0-0.5 | Pushes out (0.15→0.30) | Center (0.15) | +20° | 0° |
+| 0.5-1.0 | Center (0.15) | Pushes out (0.15→0.30) | 0° | -20° |
 
-### Animation System
+**Implementation** (`_update_skating_animation()`, lines 248-281):
+- `skating_phase` cycles 0.0 → 1.0 continuously
+- Push intensity follows `sin(phase * PI)` curve (smooth 0→1→0)
+- Transitions to parallel stance when speed >= 4.0
 
-**3. Animation Constants** (lines 10-12):
-```gdscript
-const TILT_AMOUNT = 30.0      # degrees - left/right lean
-const LEAN_AMOUNT = 20.0      # degrees - forward/backward lean
-const ANIMATION_SPEED = 10.0  # interpolation speed
-```
+#### 3. Braking System
 
-**4. Body Animations** (lines 75-98):
+**Back Key Behavior**:
+- Decelerates at `BRAKE_DECELERATION = 10.0 m/s²`
+- Does NOT move backward
+- Stops at zero speed
 
-**Tilt (Left/Right Turning)** (line 79):
-```gdscript
-target_tilt = -input_dir.x * TILT_AMOUNT  # ±30° based on horizontal input
-```
+**Brake Animations**:
+- Legs widen (0.15 → 0.25 spacing)
+- Skis angle inward 15° (pizza/wedge)
+- Body leans back -15°
 
-**Lean (Forward/Backward)** (lines 82-90):
-```gdscript
-if is_braking:
-    target_lean = -15.0   # Lean back during brake
-elif Input.is_action_pressed("move_forward"):
-    target_lean = LEAN_AMOUNT  # Lean forward when accelerating
-else:
-    target_lean = 0.0     # Neutral stance
-```
+#### 4. Body Tilt & Lean
 
-**Smooth Interpolation** (lines 93-94):
-```gdscript
-current_tilt = lerp(current_tilt, target_tilt, ANIMATION_SPEED * delta)
-current_lean = lerp(current_lean, target_lean, ANIMATION_SPEED * delta)
-```
-
-**Apply Rotation** (lines 97-98):
-```gdscript
-body.rotation_degrees.z = current_tilt  # Roll
-body.rotation_degrees.x = current_lean  # Pitch
-```
-
-### Ski Braking System
-
-**5. Ski Stance Animation** (`_update_ski_stance()`, lines 181-205):
-
-**Purpose**: Animate skis into "pizza/wedge" position when braking
-
-**Parameters** (lines 183-189):
-```gdscript
-var target_ski_rotation_x = 0.0   # Normal: parallel skis
-var target_ski_spacing = 0.15     # Normal: narrow stance
-
-if is_braking:
-    target_ski_rotation_x = 15.0  # Wedge angle
-    target_ski_spacing = 0.25     # Wider leg stance
-```
-
-**Leg Spacing** (lines 192-196):
-```gdscript
-var current_leg_spacing = $Body/LeftLeg.position.x
-var new_spacing = lerp(abs(current_leg_spacing), target_ski_spacing, ANIMATION_SPEED * delta)
-
-$Body/LeftLeg.position.x = -new_spacing
-$Body/RightLeg.position.x = new_spacing
-```
-
-**Ski Rotation** (lines 199-205):
-```gdscript
-var current_ski_rot = left_ski.rotation_degrees.y
-var new_ski_rot = lerp(current_ski_rot, target_ski_rotation_x, ANIMATION_SPEED * delta)
-
-# Left ski rotates right (positive), right ski rotates left (negative)
-# This creates a reverse wedge shape with ski tails pointing inward
-left_ski.rotation_degrees.y = new_ski_rot
-right_ski.rotation_degrees.y = -new_ski_rot
-```
-
-**Critical Detail**: Ski **tails** point inward (not tips), matching real skiing technique.
+**Automatic Animations**:
+- **Tilt** (roll): ±30° based on turn input (left/right)
+- **Lean** (pitch): +20° forward / -15° brake / 0° neutral
+- Smooth `lerp()` interpolation at `ANIMATION_SPEED = 10.0`
 
 ### Input Mapping
 
-**Required Actions** (defined in `project.godot`):
-- `move_forward`: W key / Up arrow
-- `move_back`: S key / Down arrow
-- `move_left`: A key / Left arrow
-- `move_right`: D key / Right arrow
-- `jump`: Space key
-- `toggle_camera`: F1 key
+| Action | Keys | Effect |
+|--------|------|--------|
+| `move_forward` | W / ↑ | Accelerate |
+| `move_back` | S / ↓ | Brake (no reverse) |
+| `move_left` | A / ← | Turn left |
+| `move_right` | D / → | Turn right |
+| `jump` | Space | Jump (when grounded) |
+| `toggle_camera` | F1 | Cycle camera modes |
 
-### Collision Setup
+### Physics & Collision
 
-**Player** (`player.tscn`, line 45):
-```gdscript
-collision_mask = 2  # Collides with environment layer
-```
+- **Player**: `collision_mask = 2` (detects environment)
+- **Terrain**: `collision_layer = 2` (static environment)
+- **Gravity**: Applied when `!is_on_floor()`
+- **Movement**: `move_and_slide()` with collision response
 
-**Terrain** (`terrain_generator.gd`, line 276):
-```gdscript
-collision_layer = 2  # Environment layer
-collision_mask = 0   # Doesn't check collisions (static)
-```
+### Implementation Notes
 
-### Key Design Decisions
+**Camera Mode Control** (lines 68-69):
+- Modes 0-2 (3rd/1st person): Movement **enabled**
+- Mode 3 (free camera): Movement **disabled** (inspection only)
 
-1. **Camera-Based Movement Control**:
-   - Movement enabled in all camera modes except free camera
-   - Allows 1st person skiing experience
-   - Free camera mode for terrain inspection only
-
-2. **Smooth Animation System**:
-   - All rotations use `lerp()` for smooth transitions
-   - Prevents jerky, instantaneous pose changes
-   - `ANIMATION_SPEED = 10.0` provides responsive but smooth feel
-
-3. **Physics-Based Movement**:
-   - Uses CharacterBody3D's `move_and_slide()` for collision handling
-   - Gravity applied when airborne
-   - Jump only when grounded (`is_on_floor()`)
-
-4. **Realistic Ski Mechanics**:
-   - Braking widens stance and creates wedge
-   - Ski tails converge (not tips) - matches real technique
-   - Body leans match movement direction (forward/back/left/right)
-
-### Debugging Features
-
-**Fall Detection** (lines 115-116):
-```gdscript
-if global_position.y < -50:
-    print("Player fell through terrain! Position: ", global_position)
-```
-
-### Future Enhancements (TODO)
-- Speed-based animation scaling (faster = more lean)
-- Edge carving (sharper turns at higher speeds)
-- Trick system (rotation in air)
-- Landing impact feedback
-- Speed boost zones
-- Collision reaction (bounce off obstacles)
+**Skating vs Braking Priority**:
+- Braking overrides skating animation
+- Skating only active at low speed with forward input
+- High-speed transitions smoothly to parallel stance

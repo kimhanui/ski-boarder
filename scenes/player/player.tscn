@@ -1,7 +1,7 @@
-[gd_scene load_steps=12 format=3 uid="uid://c6xj3q8pxr7kv"]
+[gd_scene load_steps=13 format=3 uid="uid://c6xj3q8pxr7kv"]
 
 [ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/player/player.gd" id="1_player_script"]
-[ext_resource type="Script" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
+[ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 height = 1.8
@@ -46,6 +46,7 @@ collision_mask = 2
 script = ExtResource("1_player_script")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 shape = SubResource("CapsuleShape3D_1")
 
 [node name="Body" type="Node3D" parent="."]
@@ -120,7 +121,7 @@ mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="Ski" type="MeshInstance3D" parent="Body/LeftLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.68, -0.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
 
@@ -138,7 +139,7 @@ mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="Ski" type="MeshInstance3D" parent="Body/RightLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.68, -0.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
 
@@ -146,8 +147,11 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ski")
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 3, 5)
 current = true
 
+[node name="Camera3D_ThirdPersonFront" type="Camera3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 0.866025, 0.5, 0, 0.5, -0.866025, 0, 3, -5)
+
 [node name="Camera3D_FirstPerson" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 0, 0.65, 0)
 
 [node name="Camera3D_Free" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 8, 10)
@@ -157,3 +161,21 @@ script = ExtResource("2_free_camera_script")
 amount = 50
 lifetime = 2.0
 process_material = SubResource("ParticleProcessMaterial_snow")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="CameraModeLabel" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 200.0
+offset_bottom = 40.0
+theme_override_font_sizes/font_size = 20
+text = "카메라: 3인칭 (뒤)"
+
+[node name="SpeedLabel" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 40.0
+offset_right = 400.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 20
+text = "속도: 0.0 m/s"

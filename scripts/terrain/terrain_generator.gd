@@ -285,6 +285,9 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	concave_shape.set_faces(faces)
 	collision_shape.shape = concave_shape
 
+	# Raise collision shape above visual mesh so skis appear on top of snow
+	collision_shape.position.y = 0.5  # 50cm above visual terrain
+
 	print("Collision shape created: %d faces" % [faces.size() / 3])
 
 	static_body.add_child(mesh_instance)

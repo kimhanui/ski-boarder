@@ -1,6 +1,6 @@
-[gd_scene load_steps=13 format=3 uid="uid://c6xj3q8pxr7kv"]
+[gd_scene load_steps=15 format=3 uid="uid://c6xj3q8pxr7kv"]
 
-[ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/player/player.gd" id="1_player_script"]
+[ext_resource type="Script" uid="uid://bp7m1rj0q7bc6" path="res://scripts/player/player_v2.gd" id="1_player_script"]
 [ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
@@ -26,6 +26,16 @@ albedo_color = Color(0.2, 0.4, 0.8, 1)
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_limb"]
 radius = 0.08
 height = 0.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pole"]
+top_radius = 0.015
+bottom_radius = 0.015
+height = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pole"]
+albedo_color = Color(0.3, 0.3, 0.3, 1)
+metallic = 0.7
+roughness = 0.3
 
 [sub_resource type="PrismMesh" id="PrismMesh_ski"]
 left_to_right = 0.0
@@ -79,15 +89,10 @@ transform = Transform3D(1, 0, 0, 0, 0.965926, -0.258819, 0, 0.258819, 0.965926, 
 mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
-[node name="LowerArm" type="MeshInstance3D" parent="Body/LeftArm"]
-transform = Transform3D(1, 0, 0, 0, 0.906308, -0.422618, 0, 0.422618, 0.906308, 0, -0.4, 0.3)
-mesh = SubResource("CapsuleMesh_limb")
-surface_material_override/0 = SubResource("StandardMaterial3D_skin")
-
 [node name="SkiPole" type="MeshInstance3D" parent="Body/LeftArm"]
-transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0, -0.5, 0)
-mesh = SubResource("CapsuleMesh_limb")
-skeleton = NodePath("../..")
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.6, 0)
+mesh = SubResource("CylinderMesh_pole")
+surface_material_override/0 = SubResource("StandardMaterial3D_pole")
 
 [node name="RightArm" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0.3, 0)
@@ -97,15 +102,10 @@ transform = Transform3D(1, 0, 0, 0, 0.965926, -0.258819, 0, 0.258819, 0.965926, 
 mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
-[node name="LowerArm" type="MeshInstance3D" parent="Body/RightArm"]
-transform = Transform3D(1, 0, 0, 0, 0.906308, -0.422618, 0, 0.422618, 0.906308, 0, -0.4, 0.3)
-mesh = SubResource("CapsuleMesh_limb")
-surface_material_override/0 = SubResource("StandardMaterial3D_skin")
-
 [node name="SkiPole" type="MeshInstance3D" parent="Body/RightArm"]
-transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0, -0.5, 0)
-mesh = SubResource("CapsuleMesh_limb")
-skeleton = NodePath("../..")
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.6, 0)
+mesh = SubResource("CylinderMesh_pole")
+surface_material_override/0 = SubResource("StandardMaterial3D_pole")
 
 [node name="LeftLeg" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, -0.3, 0)

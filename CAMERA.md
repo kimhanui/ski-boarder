@@ -307,6 +307,8 @@ func _get_camera_mode_name() -> String:
 
 ### Camera Mode Label
 
+**Purpose**: 현재 카메라 모드를 화면에 표시
+
 **Scene Setup** (`player.tscn`, lines 167-173):
 ```gdscript
 [node name="CameraModeLabel" type="Label" parent="UI"]
@@ -318,20 +320,35 @@ theme_override_font_sizes/font_size = 20
 text = "카메라: 3인칭 (뒤)"
 ```
 
-**Signal Connection** (`player.gd`, lines 47-48):
+**Display Position**: 화면 좌측 상단 (10, 10)
+
+**Signal Connection** (`player_v2.gd:79-82`):
 ```gdscript
-# Connect camera mode signal to UI update
-camera_mode_changed.connect(_on_camera_mode_changed)
+func _ready() -> void:
+    # ...
+    camera_mode_changed.connect(_on_camera_mode_changed)
+    camera_mode = 0
+    _apply_camera_mode()
+    _on_camera_mode_changed(_get_camera_mode_name())
 ```
 
-**Update Handler** (`_on_camera_mode_changed()`, lines 208-211):
+**Update Handler** (`_on_camera_mode_changed()`, lines 439-441):
 ```gdscript
 func _on_camera_mode_changed(mode_name: String) -> void:
     if camera_mode_label:
         camera_mode_label.text = "카메라: " + mode_name
 ```
 
-**Display Position**: 화면 좌측 상단 (10, 10)
+**Label Format**:
+- Mode 0: "카메라: 3인칭 (뒤)"
+- Mode 1: "카메라: 3인칭 (앞)"
+- Mode 2: "카메라: 1인칭"
+- Mode 3: "카메라: 프리 카메라"
+
+**Layout Consideration**:
+- Speed Label displays below Camera Mode Label
+- Both use left alignment at X=10
+- Speed Label at Y~45-50 (see PLAYER.md for Speed Label details)
 
 ---
 

@@ -23,6 +23,12 @@ const BREATHING_CYCLE_SPEED = 0.5  # 2 second cycle
 const ARM_SWING_SPEED = 1.25  # 0.8 second cycle (24f at 30fps)
 const EDGE_CHATTER_SPEED = 8.0  # Fast micro vibrations
 
+# Jump animation constants
+const JUMP_CROUCH_DURATION = 0.3  # Crouch before jump (seconds)
+const JUMP_LAUNCH_DURATION = 0.4  # Launch animation (seconds)
+const JUMP_CROUCH_AMOUNT = 0.15  # How much to lower body when crouching
+const JUMP_ARM_RAISE_ANGLE = 45.0  # Arms raised angle during launch
+
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
 @onready var camera_third_person_front = $Camera3D_ThirdPersonFront
@@ -65,6 +71,14 @@ var breathing_phase = 0.0  # For idle breathing cycle
 var arm_swing_phase = 0.0  # For forward arm swing
 var edge_chatter_phase = 0.0  # For ski edge micro-vibrations
 
+# Jump animation state
+enum JumpState { GROUNDED, CROUCHING, LAUNCHING, AIRBORNE, LANDING }
+var jump_state = JumpState.GROUNDED
+var jump_timer = 0.0
+var jump_crouch_progress = 0.0  # 0 to 1
+var jump_launch_progress = 0.0  # 0 to 1
+var was_in_air = false
+
 # Speed and skating state
 var current_speed = 0.0
 var skating_phase = 0.0
@@ -92,9 +106,13 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
-	# Handle jump
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = JUMP_VELOCITY
+	# Handle jump state machine
+	_update_jump_state(delta)
+
+	# Handle jump input - start crouch animation
+	if Input.is_action_just_pressed("jump") and is_on_floor() and jump_state == JumpState.GROUNDED:
+		jump_state = JumpState.CROUCHING
+		jump_timer = 0.0
 
 	# Get input
 	var turn_input = Input.get_axis("move_left", "move_right")
@@ -167,12 +185,18 @@ func _physics_process(delta: float) -> void:
 	_update_ski_stance(is_braking, delta)
 
 	# Update skating animation
-	if is_moving_forward and current_speed <= SKATING_SPEED_THRESHOLD:
+	if is_moving_forward and current_speed < SKATING_SPEED_THRESHOLD:
 		_update_skating_animation(delta)
+	elif skating_phase > 0.0:
+		# When speed crosses threshold, immediately reset skis to parallel
+		if current_speed >= SKATING_SPEED_THRESHOLD:
+			_reset_skating_stance(delta, true)  # Force immediate reset
+			skating_phase = 0.0
+		else:
+			# Smoothly return skis to parallel when exiting skating
+			_reset_skating_stance(delta, false)
+			skating_phase = 0.0
 	else:
-		# Smoothly return skis to parallel when exiting skating
-		if skating_phase > 0.0:
-			_reset_skating_stance(delta)
 		skating_phase = 0.0
 
 	# Calculate slope angle for acceleration
@@ -213,19 +237,133 @@ func _physics_process(delta: float) -> void:
 		print("Player fell through terrain! Position: ", global_position)
 
 
+## Update jump animation state machine
+func _update_jump_state(delta: float) -> void:
+	match jump_state:
+		JumpState.GROUNDED:
+			jump_crouch_progress = 0.0
+			jump_launch_progress = 0.0
+			# Detect if we left the ground (for falling)
+			if not is_on_floor() and was_in_air == false:
+				jump_state = JumpState.AIRBORNE
+				was_in_air = true
+
+		JumpState.CROUCHING:
+			jump_timer += delta
+			jump_crouch_progress = min(jump_timer / JUMP_CROUCH_DURATION, 1.0)
+
+			# After crouch animation, launch!
+			if jump_timer >= JUMP_CROUCH_DURATION:
+				jump_state = JumpState.LAUNCHING
+				jump_timer = 0.0
+				velocity.y = JUMP_VELOCITY  # Actually jump
+
+		JumpState.LAUNCHING:
+			jump_timer += delta
+			jump_launch_progress = min(jump_timer / JUMP_LAUNCH_DURATION, 1.0)
+
+			# Transition to airborne when launch animation completes or we're clearly in air
+			if jump_timer >= JUMP_LAUNCH_DURATION or not is_on_floor():
+				jump_state = JumpState.AIRBORNE
+				was_in_air = true
+
+		JumpState.AIRBORNE:
+			# Maintain airborne pose
+			jump_crouch_progress = 0.0
+			jump_launch_progress = 1.0
+
+			# When landing, transition to grounded
+			if is_on_floor():
+				jump_state = JumpState.LANDING
+				jump_timer = 0.0
+
+		JumpState.LANDING:
+			jump_timer += delta
+			# Quick landing recovery (use same duration as crouch)
+			var landing_progress = min(jump_timer / JUMP_CROUCH_DURATION, 1.0)
+			jump_launch_progress = 1.0 - landing_progress
+
+			if jump_timer >= JUMP_CROUCH_DURATION:
+				jump_state = JumpState.GROUNDED
+				was_in_air = false
+
+	# Apply jump animations to body
+	_apply_jump_animation()
+
+
+## Apply jump animation to body parts
+func _apply_jump_animation() -> void:
+	if jump_state == JumpState.GROUNDED:
+		return  # No jump animation needed
+
+	# Calculate body height offset (crouch down, then neutral)
+	var body_offset_y = 0.0
+	if jump_state == JumpState.CROUCHING:
+		# Crouch down progressively
+		body_offset_y = -JUMP_CROUCH_AMOUNT * jump_crouch_progress
+	elif jump_state == JumpState.LAUNCHING:
+		# Rise back up during launch
+		body_offset_y = -JUMP_CROUCH_AMOUNT * (1.0 - jump_launch_progress)
+
+	# Apply body offset
+	body.position.y = body_offset_y
+
+	# Arm animation during jump
+	var arm_angle_offset = 0.0
+	if jump_state == JumpState.CROUCHING:
+		# Arms stay down during crouch
+		arm_angle_offset = 0.0
+	elif jump_state == JumpState.LAUNCHING or jump_state == JumpState.AIRBORNE:
+		# Arms raise up during launch and stay up in air
+		arm_angle_offset = -JUMP_ARM_RAISE_ANGLE * jump_launch_progress
+	elif jump_state == JumpState.LANDING:
+		# Arms come back down during landing
+		arm_angle_offset = -JUMP_ARM_RAISE_ANGLE * jump_launch_progress
+
+	# Apply arm offset (additive to current arm rotation)
+	if jump_state != JumpState.GROUNDED:
+		left_arm.rotation_degrees.x += arm_angle_offset
+		right_arm.rotation_degrees.x += arm_angle_offset
+
+	# Leg bend during crouch
+	if jump_state == JumpState.CROUCHING:
+		# Bend legs during crouch
+		var leg_bend = 25.0 * jump_crouch_progress
+		left_leg.rotation_degrees.x = leg_bend
+		right_leg.rotation_degrees.x = leg_bend
+	elif jump_state == JumpState.LAUNCHING:
+		# Straighten legs during launch
+		var leg_bend = 25.0 * (1.0 - jump_launch_progress)
+		left_leg.rotation_degrees.x = leg_bend
+		right_leg.rotation_degrees.x = leg_bend
+	elif jump_state == JumpState.AIRBORNE:
+		# Slightly bent legs in air for natural pose
+		left_leg.rotation_degrees.x = 10.0
+		right_leg.rotation_degrees.x = 10.0
+	elif jump_state == JumpState.LANDING:
+		# Bend legs slightly on landing for absorption
+		var leg_bend = 10.0 + 15.0 * (1.0 - jump_launch_progress)
+		left_leg.rotation_degrees.x = leg_bend
+		right_leg.rotation_degrees.x = leg_bend
+	else:
+		# Reset leg rotation when grounded
+		left_leg.rotation_degrees.x = 0.0
+		right_leg.rotation_degrees.x = 0.0
+
+
 ## V2: Breathing cycle for IDLE animation (PLAYER_MOVEMENT.md spec)
 func _update_breathing_cycle(delta: float) -> void:
-	breathing_phase += delta * BREATHING_CYCLE_SPEED * TAU  # 2 second cycle
-	if breathing_phase >= TAU:
-		breathing_phase -= TAU
+	# Use fmod for smooth continuous phase wrapping
+	breathing_phase = fmod(breathing_phase + delta * BREATHING_CYCLE_SPEED * TAU, TAU)
 
 	# Torso: -15° ± 3° breathing
 	var breathing_amplitude = 3.0
 	var breathing_torso = sin(breathing_phase) * breathing_amplitude
 	torso.rotation_degrees.x = current_upper_lean + breathing_torso
 
-	# Arms: idle swing ±5°
-	var arm_idle_swing = sin(breathing_phase * 0.8) * 5.0  # Slightly different phase
+	# Arms: idle swing ±5° - use same breathing phase with offset for continuity
+	var arm_phase_offset = breathing_phase + PI * 0.5  # 90° phase offset
+	var arm_idle_swing = sin(arm_phase_offset) * 5.0
 	left_arm.rotation_degrees.x = current_upper_lean + arm_idle_swing
 	right_arm.rotation_degrees.x = current_upper_lean - arm_idle_swing  # Opposite phase
 
@@ -356,14 +494,21 @@ func _update_skating_animation(delta: float) -> void:
 
 
 ## Smoothly reset skiing stance when exiting skating mode
-func _reset_skating_stance(delta: float) -> void:
-	# Smoothly return legs to parallel position
-	left_leg.position.x = lerp(left_leg.position.x, -0.15, ANIMATION_SPEED * delta)
-	right_leg.position.x = lerp(right_leg.position.x, 0.15, ANIMATION_SPEED * delta)
+func _reset_skating_stance(delta: float, immediate: bool = false) -> void:
+	if immediate:
+		# Immediate reset when crossing speed threshold
+		left_leg.position.x = -0.15
+		right_leg.position.x = 0.15
+		left_ski.rotation_degrees.y = 0.0
+		right_ski.rotation_degrees.y = 0.0
+	else:
+		# Smoothly return legs to parallel position
+		left_leg.position.x = lerp(left_leg.position.x, -0.15, ANIMATION_SPEED * delta)
+		right_leg.position.x = lerp(right_leg.position.x, 0.15, ANIMATION_SPEED * delta)
 
-	# Smoothly return skis to 0° rotation (parallel)
-	left_ski.rotation_degrees.y = lerp(left_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
-	right_ski.rotation_degrees.y = lerp(right_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
+		# Smoothly return skis to 0° rotation (parallel)
+		left_ski.rotation_degrees.y = lerp(left_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
+		right_ski.rotation_degrees.y = lerp(right_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
 
 
 func _input(event: InputEvent) -> void:
@@ -453,4 +598,15 @@ func respawn() -> void:
 	target_tilt = 0.0
 	target_lean = 0.0
 	target_upper_lean = 0.0
+
+	# Reset jump state
+	jump_state = JumpState.GROUNDED
+	jump_timer = 0.0
+	jump_crouch_progress = 0.0
+	jump_launch_progress = 0.0
+	was_in_air = false
+
+	# Reset body position
+	body.position.y = 0.0
+
 	print("Player (V2) respawned at: ", spawn_position)

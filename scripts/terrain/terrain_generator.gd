@@ -277,6 +277,7 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	static_body.name = "Terrain"
 	static_body.collision_layer = 2  # Environment layer
 	static_body.collision_mask = 0
+	static_body.add_to_group("terrain_static")  # For obstacle raycast detection
 
 	# Create collision shape from mesh
 	var collision_shape = CollisionShape3D.new()

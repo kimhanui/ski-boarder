@@ -444,6 +444,84 @@ MIT License
 
 ---
 
+## 📐 Complete Scene Hierarchy
+
+### Recommended Project Structure
+
+```
+Main.tscn (Node3D)
+├─ WorldEnvironment
+│   └─ Environment (ProceduralSky + Glow)
+├─ DirectionalLight3D ("Sun")
+│   ├─ Transform: Elevation 55°, Azimuth 30°
+│   ├─ Shadow enabled, soft shadows ON
+│   └─ Light energy: 1.5
+├─ ProceduralSlope (Node3D)
+│   ├─ TerrainMesh (MeshInstance3D)
+│   │   └─ Material: Snow sparkle shader
+│   ├─ StaticBody3D (collision layer 2)
+│   │   └─ CollisionShape3D (ConcavePolygonShape3D)
+│   └─ ObstacleFactory (Node3D)
+│       ├─ Trees (MultiMeshInstance3D)
+│       ├─ Grass (MultiMeshInstance3D)
+│       └─ Rocks (MultiMeshInstance3D)
+├─ Player (CharacterBody3D)
+│   ├─ CollisionShape3D (CapsuleShape3D)
+│   ├─ Body (Node3D)
+│   │   ├─ Head, Torso, Arms, Legs (MeshInstance3D)
+│   │   └─ Skis (PrismMesh)
+│   ├─ Camera3D_ThirdPerson (rear view, current)
+│   ├─ Camera3D_ThirdPersonFront
+│   ├─ Camera3D_FirstPerson
+│   ├─ Camera3D_Free (inspection mode)
+│   ├─ SnowParticles (GPUParticles3D)
+│   ├─ SkiTracks (Node3D, Decal system)
+│   └─ UI (CanvasLayer)
+│       ├─ CameraModeLabel
+│       └─ SpeedLabel
+├─ FreeCamera (backup Camera3D for debugging)
+└─ UI (CanvasLayer)
+    ├─ DifficultySelector (VBoxContainer)
+    │   ├─ Label "Select Difficulty"
+    │   ├─ ButtonEasy
+    │   ├─ ButtonMedium
+    │   └─ ButtonHard
+    ├─ Minimap (Control)
+    │   ├─ ViewportContainer
+    │   │   └─ SubViewport
+    │   │       └─ MinimapCamera (Camera3D, orthographic)
+    │   ├─ PlayerArrow (TextureRect, red arrow)
+    │   └─ ObstacleOverlay (Control, grey dots)
+    └─ DensityControls (VBoxContainer)
+        ├─ Label "Obstacle Density"
+        ├─ ButtonSparse
+        ├─ ButtonNormal
+        └─ ButtonDense
+```
+
+### Key Design Principles
+
+1. **Separation of Concerns**
+   - Environment (lighting, sky) separate from terrain
+   - Player contains all player-specific systems
+   - Global UI in Main scene, player HUD in Player scene
+
+2. **Collision Layers**
+   - Layer 1: Player
+   - Layer 2: Environment (terrain, obstacles)
+   - Player mask = 2, Terrain layer = 2
+
+3. **Camera Hierarchy**
+   - Cameras as children of Player (follow automatically)
+   - One active camera at a time
+   - Free camera separate for inspection
+
+4. **UI Layers**
+   - Player HUD: CanvasLayer in Player scene (always visible)
+   - Global UI: CanvasLayer in Main scene (settings, minimap)
+
+---
+
 ## 📚 다음 단계
 
 셋팅이 완료되었다면:

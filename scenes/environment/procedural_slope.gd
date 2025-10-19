@@ -17,6 +17,12 @@ var _current_terrain_root: Node3D = null
 func _ready() -> void:
 	_load_and_build_terrain()
 
+	# Initialize ObstacleFactory
+	var obstacle_factory = get_node_or_null("ObstacleFactory")
+	if obstacle_factory:
+		# Set normal density by default
+		obstacle_factory.call_deferred("set_obstacle_density", "normal")
+
 
 func _load_and_build_terrain() -> void:
 	var data: Dictionary = {}

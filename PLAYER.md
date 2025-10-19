@@ -479,4 +479,332 @@ To:   [ext_resource type="Script" uid="uid://lf14tmup8yax" path="res://scripts/p
 
 ---
 
-**Last updated**: 2025-10-18 (Jump animation added)
+## Jump Animation Keyframe Reference
+
+**Source**: ADD.md specification for professional keyframe-based jump animations
+
+**Note**: Current V2 implementation uses **procedural animation** (state machine with lerped poses). This section documents the original keyframe-based specification for potential future implementation or external animation tools.
+
+---
+
+### Rig Constraints
+
+**Hierarchy**:
+```
+Body (root)
+├─ Head
+├─ Torso
+├─ LeftArm
+├─ RightArm
+├─ LeftLeg
+├─ RightLeg
+└─ Skis (children of Legs; Skis at Y = -0.7 from Legs; global ≈ -1.0)
+```
+
+**Face Details** (Head children):
+- Eyes
+- Mouth (optional)
+
+**Relative Y Positions**:
+- Head: 0.65
+- Arms: 0.3
+- Torso: 0.15
+- Legs: -0.3
+- Skis: -0.7
+
+**Animation Rules**:
+- **Upper body**: Head, Torso, LeftArm, RightArm
+- **Lower body**: LeftLeg, RightLeg (+ Skis)
+- All transforms in **LOCAL space**
+- **Head rotation**: FORBIDDEN - only allow small forward/up translation
+- **Baseline**: Torso & Arms X = -45° when gliding
+- **Frame rate**: 30 FPS
+- **Root motion**: OFF
+- **Loop**: OFF (one-shot animations)
+
+---
+
+### A) SmallHop (16 frames, one-shot)
+
+**Visual**: 작은 지형에서 톡 튀어 오르는 느낌. 폴은 살짝 뒤로.
+
+**Timing**:
+- f0-f4: Crouch (compression) - 4 frames
+- f4-f7: Takeoff - 3 frames
+- f7-f11: Air phase - 4 frames
+- f11-f16: Landing - 5 frames
+
+**Mechanics**:
+- Crouch: 무릎 굽힘, Torso X = -55°; Arms sweep back X = -55°
+- Takeoff: Torso X = -35°로 복원; 폴 뒤로 스윙
+- Air: Skis **parallel**, Roll(Z) ±2° 미세 흔들림
+- Land: 무릎 흡수, Torso X = -50°→-40°
+- Head: posZ -0.02 on push, posY +0.015 in air; **no rotation**
+
+**Keyframe Table**:
+
+| Frame | Node | rotX | rotY | rotZ | posX | posY | posZ |
+|-------|------|------|------|------|------|------|------|
+| **f0** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.01 |
+| | LeftLeg | 0 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | 0 | 0 | 0 | 0 | 0 | 0 |
+| | Skis | 0 | 0 | 0 | 0 | 0 | 0 |
+| **f4** | Torso | -55 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -55 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -55 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.02 |
+| | LeftLeg | -6 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | -6 | 0 | 0 | 0 | 0 | 0 |
+| **f7** | Torso | -35 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -30 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -30 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0.015 | -0.01 |
+| | Skis | 0 | 0 | +2 | 0 | 0 | 0 |
+| **f11** | Torso | -40 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| **f16** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | (all return to FORWARD/IDLE pose) |
+
+**Easing**:
+- Crouch (f0→f4): easeIn
+- Takeoff (f4→f7): easeOut
+- Air (f7→f11): linear hold
+- Land (f11→f16): easeInOut
+
+---
+
+### B) StandardJump (22 frames, one-shot)
+
+**Visual**: 일반 점프. 공중에서 안정적인 평행 스키.
+
+**Timing**:
+- f0-f6: Crouch (강) - 6 frames
+- f6-f10: Takeoff - 4 frames
+- f10-f16: Air phase - 6 frames
+- f16-f22: Landing - 6 frames
+
+**Mechanics**:
+- Crouch: Torso X = -58°, COM drop Y -0.02
+- Takeoff: Torso X = -38°; Arms forward X = -20°
+- Air: Skis parallel; **nose-up** 미세 Roll +3°, Yaw ±1° 노이즈
+- Land: 깊게 흡수 후 -45°로 복원
+- Head: f6 posZ -0.03, f10 posY +0.025, f22 baseline
+
+**Keyframe Table**:
+
+| Frame | Node | rotX | rotY | rotZ | posX | posY | posZ |
+|-------|------|------|------|------|------|------|------|
+| **f0** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -25 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -25 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.01 |
+| **f6** | Torso | -58 | 0 | 0 | 0 | -0.02 | 0 |
+| | LeftArm | -60 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -60 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.03 |
+| | LeftLeg | -8 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | -8 | 0 | 0 | 0 | 0 | 0 |
+| **f10** | Torso | -38 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0.025 | -0.01 |
+| | Skis | 0 | 0 | +3 | 0 | 0 | 0 |
+| **f16** | Torso | -50 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -45 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -45 | 0 | 0 | 0 | 0 | 0 |
+| | LeftLeg | -10 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | -10 | 0 | 0 | 0 | 0 | 0 |
+| **f22** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | (return to FORWARD pose) |
+
+**Easing**:
+- Crouch (f0→f6): easeIn
+- Takeoff (f6→f10): easeOut
+- Air (f10→f16): linear
+- Land (f16→f22): easeInOut
+
+---
+
+### C) BigJump / Drop (30 frames, one-shot)
+
+**Visual**: 높은 지형. 비행시간 길고 착지 충격 큼.
+
+**Timing**:
+- f0-f8: Deep Crouch - 8 frames
+- f8-f12: Powerful Takeoff - 4 frames
+- f12-f22: Long Air - 10 frames
+- f22-f30: Hard Landing - 8 frames
+
+**Mechanics**:
+- Deep Crouch: Torso X = -62°, Arms X = -60°, COM drop Y -0.03
+- Powerful Takeoff: Torso X = -35°; Arms 전방 스윙 X = -10°
+- Long Air: Skis parallel; 공중 안정 위해 Torso 미세 Roll(Z) ±2°; Skis Roll(Z) +3° 유지
+- Hard Landing: 무릎 크게 굽힘; Torso X = -60° → -45°로 회복; 폴 끝이 지면 가까이
+- 착지 2프레임 전 Y -0.01 급락(충격감), 이후 4프레임 동안 댐핑 복원
+
+**Keyframe Table**:
+
+| Frame | Node | rotX | rotY | rotZ | posX | posY | posZ |
+|-------|------|------|------|------|------|------|------|
+| **f0** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -30 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -30 | 0 | 0 | 0 | 0 | 0 |
+| **f8** | Torso | -62 | 0 | 0 | 0 | -0.03 | 0 |
+| | LeftArm | -60 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -60 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.04 |
+| | LeftLeg | -12 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | -12 | 0 | 0 | 0 | 0 | 0 |
+| **f12** | Torso | -35 | 0 | ±2 | 0 | 0 | 0 |
+| | LeftArm | -10 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -10 | 0 | 0 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0.03 | -0.02 |
+| | Skis | 0 | 0 | +3 | 0 | 0 | 0 |
+| **f20** | (Hold air pose) |
+| | Torso | -35 | 0 | ±2 | 0 | 0 | 0 |
+| | Head | 0 | 0 | 0 | 0 | 0 | -0.01 |
+| **f22** | Torso | -60 | 0 | 0 | 0 | -0.01 | 0 |
+| | LeftLeg | -15 | 0 | 0 | 0 | 0 | 0 |
+| | RightLeg | -15 | 0 | 0 | 0 | 0 | 0 |
+| **f26** | Torso | -55 | 0 | 0 | 0 | -0.005 | 0 |
+| | LeftArm | -40 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -40 | 0 | 0 | 0 | 0 | 0 |
+| **f30** | Torso | -45 | 0 | 0 | 0 | 0 | 0 |
+| | (return to FORWARD pose) |
+
+**Easing**:
+- Deep Crouch (f0→f8): easeIn
+- Takeoff (f8→f12): easeOut
+- Long Air (f12→f22): linear
+- Landing impact (f22→f26): easeIn (sharp)
+- Recovery (f26→f30): easeOut
+
+---
+
+### D) Safety Cancel (18 frames, optional)
+
+**Visual**: 공중에서 착지 직전 스노우플라우로 전환.
+
+**Timing**:
+- f0-f12: Normal air phase (from jump)
+- f12-f18: Brake preparation - 6 frames
+
+**Mechanics**:
+- 마지막 6f 동안 Skis Yaw: Left +12°, Right -12°로 **A자 준비**
+- 착지 시 Torso X = -25°(뒤로), Arms X = -20°(앞으로)
+- 다음 클립 "BRAKE"에 4f 블렌드
+
+**Keyframe Table**:
+
+| Frame | Node | rotX | rotY | rotZ | posX | posY | posZ |
+|-------|------|------|------|------|------|------|------|
+| **f0-f11** | (Continue from jump air phase) |
+| **f12** | Torso | -40 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | LeftSki | 0 | +12 | 0 | 0 | 0 | 0 |
+| | RightSki | 0 | -12 | 0 | 0 | 0 | 0 |
+| **f18** | Torso | -25 | 0 | 0 | 0 | 0 | 0 |
+| | LeftArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | RightArm | -20 | 0 | 0 | 0 | 0 | 0 |
+| | LeftSki | 0 | +15 | 0 | 0 | 0 | 0 |
+| | RightSki | 0 | -15 | 0 | 0 | 0 | 0 |
+| | (blend to BRAKE in 4f) |
+
+**Easing**:
+- Brake prep (f12→f18): easeInOut
+
+---
+
+### Blending Rules
+
+**Entry Blends**:
+- FORWARD → SmallHop/Standard/BigJump: 4-6 frames, easeOut
+- Any state → SafetyCancel: Immediate (triggered in air)
+
+**Exit Blends**:
+- Jump → FORWARD: 6 frames
+- Jump → BRAKE: 4 frames (higher priority)
+- SafetyCancel → BRAKE: 4 frames
+
+**Additive Layer**:
+- Lower-body can have terrain-response vibrations (±1-2°)
+- **Head rotation FORBIDDEN** - only translation allowed
+- Upper-body follows core animation
+
+---
+
+### Implementation Notes for Godot
+
+**AnimationPlayer Setup**:
+1. Create 4 animations: "SmallHop", "StandardJump", "BigJump", "SafetyCancel"
+2. Set frame rate to 30 FPS in import settings
+3. Disable root motion, disable looping
+4. Set `auto_advance = false` (manual control)
+
+**Keyframe Format**:
+```gdscript
+# Track: "Body/Torso:rotation_degrees"
+# Time 0.0 (f0 @ 30fps): Vector3(-45, 0, 0)
+# Time 0.133 (f4): Vector3(-55, 0, 0)
+# Easing: In (for crouch phase)
+```
+
+**Blending Code Example**:
+```gdscript
+# Entry blend
+animation_player.play("StandardJump")
+animation_tree.set("parameters/jump_blend/blend_amount", 0.0)
+var tween = create_tween()
+tween.tween_property(animation_tree, "parameters/jump_blend/blend_amount", 1.0, 0.2)
+
+# Exit blend
+animation_player.queue("FORWARD")  # Blend over 6 frames (0.2s at 30fps)
+```
+
+**Trigger Logic**:
+```gdscript
+# Determine jump size based on velocity/context
+if abs(velocity.y) < 3.0:
+    animation_player.play("SmallHop")
+elif abs(velocity.y) < 8.0:
+    animation_player.play("StandardJump")
+else:
+    animation_player.play("BigJump")
+
+# Safety cancel (user presses brake in air)
+if is_airborne and Input.is_action_pressed("move_back"):
+    animation_player.play("SafetyCancel")
+```
+
+---
+
+### Current V2 vs Keyframe Approach
+
+**V2 Procedural** (current implementation):
+- ✅ Fully responsive to physics
+- ✅ Smooth transitions
+- ✅ Adapts to any jump height
+- ❌ Less precise posing
+- ❌ Cannot achieve complex choreography
+
+**Keyframe-Based** (this specification):
+- ✅ Precise control over every pose
+- ✅ Professional-quality motion
+- ✅ Easier for animators to tweak
+- ❌ Fixed timings may not match physics
+- ❌ Requires more asset management
+
+**Hybrid Approach** (recommended for future):
+- Use keyframe animations for core poses
+- Apply procedural layer for physics response
+- Blend based on context (small vs big jump)
+- Use additive animation for terrain reactions
+
+---
+
+**Last updated**: 2025-10-18 (Jump animation added, keyframe reference documented)

@@ -1,7 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://b7j8lam3n4p5q"]
+[gd_scene load_steps=3 format=3 uid="uid://b7j8lam3n4p5q"]
 
 [ext_resource type="Script" path="res://scenes/environment/procedural_slope.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/terrain/obstacle_factory.gd" id="2_obstacle_factory"]
 
 [node name="ProceduralSlope" type="Node3D"]
 script = ExtResource("1_script")
 slope_data_path = "res://resources/slope_data.json"
+
+[node name="ObstacleFactory" type="Node3D" parent="."]
+script = ExtResource("2_obstacle_factory")

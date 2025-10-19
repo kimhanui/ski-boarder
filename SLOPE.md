@@ -593,3 +593,212 @@ Built terrain mesh with 37500 faces
 - Braking overrides skating animation
 - Skating only active at low speed with forward input
 - High-speed transitions smoothly to parallel stance
+
+---
+
+## 13) Advanced Features
+
+### Snow Sparkle Shader
+
+**File**: `resources/shaders/snow_sparkle.gdshader`
+
+**Purpose**: Enhanced snow material with view-dependent sparkle effects, density mapping for compacted paths, and natural winter atmosphere.
+
+**Key Features**:
+
+1. **PBR-Like Parameters**:
+   - `base_color`: Slightly warm white `(0.98, 0.98, 0.96)`
+   - `roughness`: 0.85 for grazing highlights
+   - `normal_intensity`: 0.2 for micro-roughness of packed snow
+   - `metallic`: 0.0 (snow is non-metallic)
+
+2. **Sparkle System**:
+   - `sparkle_intensity`: 0.0-2.0 (default 0.3)
+   - `sparkle_scale`: Grid size for sparkle points (1.0-100.0, default 20.0)
+   - `sparkle_threshold`: Brightness cutoff (0.0-1.0, default 0.85)
+   - **View-dependent**: Sparkles only appear at grazing angles (0.3-0.7 view angle)
+   - **Grid-based noise**: Hash function creates random sparkle per grid cell
+   - **Circular shape**: Smooth falloff for each sparkle point
+
+3. **Density Mapping**:
+   - `density_map`: Texture showing compacted snow paths (darker areas)
+   - `density_strength`: 0.0-1.0 (default 0.3) - how much darker compacted areas become
+   - Applied multiplicatively to base color: `mix(1.0, 0.85, density * strength)`
+
+4. **Normal Mapping**:
+   - `normal_map`: For micro-roughness variation
+   - `NORMAL_MAP_DEPTH`: Controlled by `normal_intensity` parameter
+
+5. **Emission**:
+   - Subtle blue-white glow: `vec3(0.15, 0.15, 0.2) * 0.5`
+   - Simulates snow's natural luminosity under sunlight
+
+**Shader Implementation Highlights**:
+
+```glsl
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float sparkle_noise(vec2 uv, vec3 view_dir, vec3 normal) {
+    float view_angle = dot(view_dir, normal);
+    float angle_factor = smoothstep(0.3, 0.7, abs(view_angle));
+
+    vec2 grid_uv = uv * sparkle_scale;
+    vec2 grid_id = floor(grid_uv);
+    float sparkle = smoothstep(sparkle_threshold, 1.0, hash(grid_id));
+
+    float dist = length(fract(grid_uv) - 0.5);
+    float shape = 1.0 - smoothstep(0.2, 0.5, dist);
+
+    return sparkle * shape * angle_factor;
+}
+```
+
+**Visual Result**: Sunlit snow shows subtle sparkle when viewed at grazing angles, with darker compacted paths where players frequently travel.
+
+---
+
+## 14) Enhanced Terrain Material
+
+### Snow Surface Properties
+
+**Goal**: Create realistic snow-covered mountain terrain with visible thickness and sparkle under sunlight.
+
+**Material Configuration** (`terrain_generator.gd`):
+
+| Property | Value | Purpose |
+|----------|-------|---------|
+| **Base Color** | `#FAFAF6` (slightly warm white) | Natural snow appearance |
+| **Roughness** | `0.85` | Diffuse surface with subtle highlights |
+| **Emission** | `Color(0.15, 0.15, 0.2)` | Subtle blue-white glow |
+| **Emission Energy** | `0.5` | Gentle self-illumination |
+
+### Lighting Setup
+
+**DirectionalLight3D ("Sun")**:
+- **Elevation**: 55°
+- **Azimuth**: 30°
+- **Shadow Enabled**: `true`
+- **Soft Shadows**: Enabled
+- **Light Energy**: `1.5` (strong sunlight)
+- **Shadow Opacity**: `0.6` (soft, natural shadows)
+
+**Sky Configuration**:
+- **Type**: ProceduralSky
+- **Ambient Tint**: Bluish (cold atmosphere)
+- **Horizon Color**: `Color(0.64625, 0.65575, 0.67075)`
+
+**Visual Effect**:
+- Snow sparkles at grazing angles under sunlight
+- Subtle blue-white emission simulates natural snow luminosity
+- Low roughness creates reflective, icy surface appearance
+- Soft shadows add depth and realism
+
+---
+
+### Obstacle System
+
+**See**: [OBSTACLES.md](OBSTACLES.md) for complete obstacle system documentation.
+
+**Quick Reference**:
+- Scene-based obstacles with physics collision
+- Player-proximity spawning (70m radius)
+- Density modes: Sparse (2), Normal (10), Dense (20)
+- 3D labels for obstacle identification
+- Physics raycast-based terrain snapping
+
+---
+
+### Ski Tracks System
+
+**File**: `scripts/player/ski_tracks.gd`
+
+**Purpose**: Visual trail system that creates persistent ski marks on snow using Decal projection.
+
+**Key Features**:
+
+1. **Decal-Based Rendering**:
+   - Projects tracks onto terrain surface from above
+   - Each track is a `Decal` node positioned at ski contact point
+   - Size: 0.15m wide × 1.2m long
+   - Position: 5cm above ground to prevent z-fighting
+
+2. **Track Creation**:
+   - `track_spacing`: Minimum 0.5m between tracks (prevents overlap)
+   - Tracks only created when `player.is_on_floor()` and moving
+   - Rotation matches player yaw for directional accuracy
+   - Track texture: Gradient (darker in center, lighter at edges)
+
+3. **Fade-Out System**:
+   - `track_lifetime`: 90 seconds (configurable)
+   - Alpha fade from 1.0 → 0.0 over lifetime
+   - Tracks automatically removed when expired
+   - Max 200 active tracks (`max_tracks`)
+   - Oldest tracks removed first when limit reached
+
+4. **Visual Appearance**:
+   - Color: Dark compacted snow `(0.7, 0.7, 0.75, 0.8)`
+   - Texture: Simple gradient alpha channel
+   - Blend mode: TRANSPARENCY_ALPHA
+   - Upper/lower fade: 0.1 for smooth blending with terrain
+
+5. **Performance**:
+   - Lightweight Decal nodes (GPU-efficient projection)
+   - Automatic cleanup prevents memory buildup
+   - Track count signal for debugging/UI display
+
+**API**:
+
+```gdscript
+# Configure in editor
+@export var player: CharacterBody3D
+@export var max_tracks := 200
+@export var track_spacing := 0.5
+@export var track_lifetime := 90.0
+@export var track_width := 0.15
+@export var track_length := 1.2
+
+# Runtime control
+ski_tracks.clear_tracks()  # Remove all tracks
+ski_tracks.set_track_lifetime(120.0)  # Change fade time
+var count = ski_tracks.get_track_count()  # Current active tracks
+
+# Signal when tracks update
+ski_tracks.tracks_updated.connect(_on_tracks_updated)
+```
+
+**Implementation Details**:
+
+```gdscript
+func _create_track_decal(pos: Vector3, yaw: float) -> void:
+    var decal = Decal.new()
+    decal.global_position = pos + Vector3(0, 0.05, 0)  # Slightly above ground
+    decal.rotation.y = yaw  # Match ski direction
+    decal.rotation.x = deg_to_rad(-90)  # Project downward
+    decal.size = Vector3(track_width, track_length, 1.0)
+    decal.texture_albedo = _create_track_texture()
+    decal.modulate = Color(0.7, 0.7, 0.75, 1.0)
+    decal.upper_fade = 0.1
+    decal.lower_fade = 0.1
+    add_child(decal)
+```
+
+**Update Logic**:
+
+```gdscript
+func _process(delta: float) -> void:
+    if player and player.is_on_floor():
+        var distance_moved = player.global_position.distance_to(last_track_position)
+        if distance_moved >= track_spacing:
+            _create_track_decal(player.global_position, player.rotation.y)
+            last_track_position = player.global_position
+
+    _update_tracks(delta)  # Fade and remove expired tracks
+```
+
+**Design Rationale**:
+- Decal approach chosen over dynamic texture for simplicity and flexibility
+- 90-second lifetime balances visual persistence with memory management
+- Gradient texture creates realistic ski compression appearance
+- Position offset prevents z-fighting with terrain mesh

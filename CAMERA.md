@@ -651,3 +651,554 @@ _on_camera_mode_changed() updates UI label
 - **유연성**: 다양한 플레이 스타일 지원
 - **디버깅 친화적**: 프리 카메라로 레벨 디자인 검증
 - **확장 가능**: 추가 카메라 모드 쉽게 추가 가능
+
+---
+
+## Minimap System
+
+**Files**:
+- `scripts/ui/minimap.gd` - Minimap rendering and player tracking
+- `scripts/ui/density_controls.gd` - Obstacle density control UI
+
+**Purpose**: Top-down orthographic view of terrain with player position indicator, anchored to screen corner with runtime zoom control.
+
+---
+
+### Core Architecture
+
+**Rendering Approach**:
+- `SubViewport` + `Camera3D` (orthographic projection)
+- Renders to `TextureRect` in `CanvasLayer`
+- Separate rendering pipeline from main viewport
+- Always-update mode for real-time tracking
+
+**Node Structure**:
+```
+Minimap (Control)
+├─ ViewportContainer (SubViewportContainer)
+│  └─ MinimapViewport (SubViewport)
+│     └─ MinimapCamera (Camera3D)
+└─ PlayerArrow (TextureRect)  # Overlay, not in viewport
+```
+
+---
+
+### Implementation Details
+
+#### 1. Setup & Configuration
+
+**Export Variables** (`minimap.gd:10-17`):
+```gdscript
+@export var player: Node3D  # Reference to player
+@export var minimap_size := Vector2(180, 180)  # Minimap dimensions (px)
+@export var view_radius := 120.0  # How many meters around player to show
+@export var zoom_level := 1.0:  # Zoom multiplier (0.5-2.0)
+    set(value):
+        zoom_level = clamp(value, 0.5, 2.0)
+        _update_camera_size()
+        zoom_changed.emit(zoom_level)
+```
+
+**Camera Settings** (`minimap.gd:26-27`):
+```gdscript
+var camera_height := 150.0  # Fixed height above terrain
+var camera_update_smoothing := 0.1  # Lower = smoother but more lag
+```
+
+**Initialization Flow** (`_ready()`, lines 30-39):
+```gdscript
+func _ready() -> void:
+    _setup_ui()           # Position and size Control
+    _setup_viewport()     # Create SubViewport + Container
+    _setup_camera()       # Create orthographic Camera3D
+    _create_player_arrow() # Create red arrow overlay
+
+    if not player:
+        push_warning("Minimap: No player reference set!")
+```
+
+---
+
+#### 2. UI Positioning
+
+**Screen Anchor** (`_setup_ui()`, lines 48-56):
+```gdscript
+# Anchor to top-right corner
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -minimap_size.x - 20  # 20px margin from right edge
+offset_top = 20  # 20px margin from top
+offset_right = -20
+offset_bottom = minimap_size.y + 20
+```
+
+**Visual Result**: 180×180px square in top-right corner with 20px margins.
+
+---
+
+#### 3. Viewport & Camera Setup
+
+**SubViewport Configuration** (`_setup_viewport()`, lines 69-75):
+```gdscript
+sub_viewport = SubViewport.new()
+sub_viewport.size = minimap_size
+sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+sub_viewport.transparent_bg = false
+viewport_container.add_child(sub_viewport)
+```
+
+**Orthographic Camera** (`_setup_camera()`, lines 78-90):
+```gdscript
+minimap_camera = Camera3D.new()
+minimap_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+minimap_camera.size = view_radius * 2.0 / zoom_level  # 240m default
+minimap_camera.near = 0.1
+minimap_camera.far = 300.0
+
+# Look straight down
+minimap_camera.rotation_degrees = Vector3(-90, 0, 0)
+
+sub_viewport.add_child(minimap_camera)
+```
+
+**Key Point**: Orthographic size of `240m` (120m radius × 2) shows 240m square area around player at 1.0x zoom.
+
+---
+
+#### 4. Player Arrow Indicator
+
+**Creation** (`_create_player_arrow()`, lines 93-107):
+```gdscript
+player_arrow = TextureRect.new()
+player_arrow.texture = _create_arrow_texture()
+
+# Center in minimap
+player_arrow.pivot_offset = Vector2(8, 8)  # Half of 16x16
+player_arrow.position = (minimap_size / 2) - Vector2(8, 8)
+player_arrow.size = Vector2(16, 16)
+
+# Add as overlay (not in viewport)
+add_child(player_arrow)
+```
+
+**Arrow Texture** (`_create_arrow_texture()`, lines 110-131):
+- Procedurally generated red arrow pointing upward
+- 16×16 pixel `Image` converted to `ImageTexture`
+- Vertical line body + triangular head
+- Color: `Color(1, 0, 0, 1)` (pure red)
+
+**Why Overlay?**:
+- Arrow position fixed at minimap center
+- World rotates around player, not vice versa
+- Simpler than moving camera separately from rotation
+
+---
+
+#### 5. Real-Time Tracking
+
+**Update Loop** (`_process()`, lines 134-139):
+```gdscript
+func _process(_delta: float) -> void:
+    if not player or not minimap_camera:
+        return
+
+    _follow_player()
+    _update_player_arrow()
+```
+
+**Camera Following** (`_follow_player()`, lines 142-153):
+```gdscript
+func _follow_player() -> void:
+    var player_pos = player.global_position
+
+    # Target position (above player)
+    var target_pos = Vector3(player_pos.x, player_pos.y + camera_height, player_pos.z)
+
+    # Smooth follow (lerp for slight delay)
+    minimap_camera.global_position = minimap_camera.global_position.lerp(
+        target_pos,
+        camera_update_smoothing
+    )
+```
+
+**Smoothing Effect**:
+- `camera_update_smoothing = 0.1` → smooth lag behind player
+- Prevents jittery movement from physics fluctuations
+- Higher values (0.5) = more responsive, lower (0.05) = smoother
+
+**Arrow Rotation** (`_update_player_arrow()`, lines 156-165):
+```gdscript
+func _update_player_arrow() -> void:
+    if not player_arrow:
+        return
+
+    # Get player's Y rotation (yaw)
+    var player_yaw = player.rotation.y
+
+    # Rotate arrow to match
+    player_arrow.rotation = player_yaw
+```
+
+**Result**: Arrow rotates to always point in player's facing direction.
+
+---
+
+#### 6. Zoom Control
+
+**Zoom Setter** (lines 13-17):
+```gdscript
+@export var zoom_level := 1.0:
+    set(value):
+        zoom_level = clamp(value, 0.5, 2.0)
+        _update_camera_size()
+        zoom_changed.emit(zoom_level)
+```
+
+**Camera Size Update** (`_update_camera_size()`, lines 168-171):
+```gdscript
+func _update_camera_size() -> void:
+    if minimap_camera:
+        minimap_camera.size = view_radius * 2.0 / zoom_level
+```
+
+**Zoom Levels**:
+| Zoom | Camera Size | View Area | Use Case |
+|------|-------------|-----------|----------|
+| **0.5x** | 480m | Large area | Terrain overview |
+| **1.0x** | 240m | Standard | Normal gameplay |
+| **2.0x** | 120m | Close-up | Precise navigation |
+
+---
+
+#### 7. API & Signals
+
+**Public Methods**:
+
+```gdscript
+# Visibility control
+minimap.set_minimap_visible(true/false)
+minimap.toggle_visibility()
+
+# Zoom control
+minimap.set_minimap_zoom(1.5)
+var current_zoom = minimap.get_zoom_level()
+```
+
+**Signals**:
+
+```gdscript
+signal visibility_changed(visible: bool)
+signal zoom_changed(zoom_level: float)
+
+# Usage:
+minimap.visibility_changed.connect(_on_minimap_toggled)
+minimap.zoom_changed.connect(_on_zoom_changed)
+```
+
+---
+
+### Density Controls UI
+
+**File**: `scripts/ui/density_controls.gd`
+
+**Purpose**: UI buttons to control obstacle density (sparse/normal/dense) positioned next to minimap.
+
+---
+
+#### UI Layout
+
+**Position** (`_create_buttons()`, lines 27-34):
+```gdscript
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -100   # 20px margin from edge
+offset_top = 220     # Below minimap (180px + 20px + 20px gap)
+offset_right = -20
+offset_bottom = 340
+```
+
+**Size**: 80×120px vertical button stack
+
+**Visual Layout**:
+```
+┌─────────────────────┐
+│  Minimap (180×180)  │  ← Y: 20
+└─────────────────────┘
+
+┌─────────────┐
+│   Density   │  ← Label
+├─────────────┤
+│   Sparse    │  ← Button 1
+├─────────────┤
+│   Normal    │  ← Button 2 (default)
+├─────────────┤
+│   Dense     │  ← Button 3
+└─────────────┘
+      ↑ Y: 220
+```
+
+---
+
+#### Button Creation
+
+**Structure** (`_create_buttons()`, lines 36-71):
+```gdscript
+# Label
+var label = Label.new()
+label.text = "Density"
+label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+add_child(label)
+
+# Sparse button
+sparse_button = Button.new()
+sparse_button.text = "Sparse"
+sparse_button.toggle_mode = true
+sparse_button.custom_minimum_size = Vector2(80, 30)
+sparse_button.pressed.connect(_on_sparse_pressed)
+add_child(sparse_button)
+
+# (Normal and Dense buttons similar...)
+```
+
+**Button Properties**:
+- `toggle_mode = true` → Stay pressed when clicked
+- Only one button active at a time
+- 80×30px minimum size
+- Connected to respective handler functions
+
+---
+
+#### Density Mode Logic
+
+**Mode Change Handler** (`_set_density_mode()`, lines 94-107):
+```gdscript
+func _set_density_mode(mode: String) -> void:
+    if mode == current_mode:
+        return
+
+    current_mode = mode
+    _set_active_button(mode)
+
+    # Update obstacle factory
+    if obstacle_factory:
+        obstacle_factory.set_obstacle_density(mode)
+
+    # Emit signal
+    density_mode_changed.emit(mode)
+```
+
+**Visual State** (`_set_active_button()`, lines 111-123):
+```gdscript
+func _set_active_button(mode: String) -> void:
+    # Deactivate all
+    sparse_button.button_pressed = false
+    normal_button.button_pressed = false
+    dense_button.button_pressed = false
+
+    # Activate selected
+    match mode:
+        "sparse": sparse_button.button_pressed = true
+        "normal": normal_button.button_pressed = true
+        "dense": dense_button.button_pressed = true
+```
+
+---
+
+#### Integration with Obstacle Factory
+
+**Reference Setup** (`density_controls.gd:9`):
+```gdscript
+@export var obstacle_factory: ObstacleFactory  # Set in editor
+```
+
+**Signal Flow**:
+```
+User clicks "Dense" button
+    ↓
+_on_dense_pressed()
+    ↓
+_set_density_mode("dense")
+    ↓
+obstacle_factory.set_obstacle_density("dense")
+    ↓
+ObstacleFactory regenerates with 2.0x multiplier
+    ↓
+density_mode_changed.emit("dense")
+```
+
+**Public API**:
+```gdscript
+# Get current mode
+var mode = density_controls.get_current_mode()  # "sparse" | "normal" | "dense"
+
+# Enable/disable buttons
+density_controls.set_buttons_enabled(false)  # Disable during loading
+
+# Signal
+density_controls.density_mode_changed.connect(_on_density_changed)
+```
+
+---
+
+### Scene Integration
+
+**Typical Hierarchy**:
+```
+Main (Node3D)
+├─ Player (CharacterBody3D)
+│  └─ UI (CanvasLayer)
+│     ├─ Minimap (Control, minimap.gd)
+│     ├─ DensityControls (VBoxContainer, density_controls.gd)
+│     ├─ CameraModeLabel (Label)
+│     └─ SpeedLabel (Label)
+└─ Environment (Node3D)
+   └─ ObstacleFactory (Node3D, obstacle_factory.gd)
+```
+
+**Reference Setup** (in editor or script):
+```gdscript
+# Minimap
+var minimap = $UI/Minimap
+minimap.player = $Player
+
+# Density Controls
+var density_controls = $UI/DensityControls
+density_controls.obstacle_factory = $Environment/ObstacleFactory
+```
+
+---
+
+### Performance Considerations
+
+**SubViewport Optimization**:
+- Fixed 180×180 resolution (low render cost)
+- `UPDATE_ALWAYS` required for real-time tracking
+- Consider `UPDATE_WHEN_VISIBLE` if togglable
+
+**Camera Culling**:
+- Orthographic camera only renders visible layers
+- Set `cull_mask` to exclude UI elements
+- Only render terrain and obstacles
+
+**Memory**:
+- Single SubViewport texture (~130KB at 180×180 RGBA)
+- Arrow texture (16×16 = minimal)
+- No performance impact on main viewport
+
+---
+
+### Visual Customization
+
+**Minimap Background**:
+```gdscript
+# In _setup_viewport():
+sub_viewport.transparent_bg = false  # Opaque background
+# Could add WorldEnvironment to SubViewport for sky color
+```
+
+**Arrow Styling**:
+- Current: Red arrow (`Color(1, 0, 0, 1)`)
+- Modify `_create_arrow_texture()` for different colors/shapes
+- Could use sprite texture instead of procedural
+
+**Border/Frame**:
+```gdscript
+# Add Panel or NinePatchRect as sibling to ViewportContainer
+var border = Panel.new()
+border.size = minimap_size + Vector2(4, 4)
+border.position = Vector2(-2, -2)
+add_child(border)
+move_child(border, 0)  # Behind viewport
+```
+
+---
+
+### Future Enhancements
+
+**Planned Features**:
+
+1. **Obstacle Icons**:
+   - Draw tree/rock icons on minimap
+   - Use `ImmediateMesh` or sprite overlays
+
+2. **Path Visualization**:
+   - Highlight optimal ski path
+   - Show checkpoints as markers
+
+3. **Zoom Slider**:
+   - Replace fixed buttons with continuous slider
+   - `HSlider` control for 0.5-2.0 range
+
+4. **Fog of War**:
+   - Unexplored areas darkened
+   - Gradually reveal terrain as player moves
+
+5. **Terrain Coloring**:
+   - Height-based terrain colors
+   - Snow vs rock vs trees differentiation
+
+6. **Compass Rose**:
+   - North indicator
+   - Fixed orientation option
+
+---
+
+### Debugging
+
+**Common Issues**:
+
+1. **Minimap not visible**:
+   - Check `SubViewport.render_target_update_mode = UPDATE_ALWAYS`
+   - Verify `ViewportContainer.stretch = true`
+   - Ensure `TextureRect` has viewport texture
+
+2. **Arrow not rotating**:
+   - Confirm `player` reference is set
+   - Check player rotation is in radians (Y-axis)
+   - Verify `_update_player_arrow()` called in `_process()`
+
+3. **Camera not following**:
+   - Check player reference is valid Node3D
+   - Verify `camera_update_smoothing > 0.0`
+   - Ensure camera is child of SubViewport
+
+**Debug Helpers**:
+```gdscript
+# Print minimap camera position
+print("Minimap cam: ", minimap_camera.global_position)
+
+# Verify zoom calculation
+print("Ortho size: ", minimap_camera.size, " | Zoom: ", zoom_level)
+
+# Check player distance
+print("Player at: ", player.global_position)
+```
+
+---
+
+### Summary
+
+**Minimap System**:
+- Top-down orthographic view (180×180px, top-right corner)
+- Real-time player tracking with smooth lerp
+- Red arrow indicator showing player heading
+- Zoom control (0.5-2.0x, 120-480m view area)
+- Visibility toggle API
+
+**Density Controls**:
+- 3-button vertical stack (sparse/normal/dense)
+- Positioned below minimap (Y:220)
+- Direct integration with ObstacleFactory
+- Toggle-style visual feedback
+- Signal-based event system
+
+**Design Goals**:
+- **Minimal UI footprint**: Small, non-intrusive corner display
+- **Real-time feedback**: Always-updated player position
+- **Gameplay utility**: Helps navigation and obstacle awareness
+- **Performance efficient**: Low-resolution SubViewport, fixed update rate
+- **Extensible**: Easy to add waypoints, icons, or overlays

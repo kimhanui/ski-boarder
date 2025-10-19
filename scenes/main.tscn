@@ -1,10 +1,12 @@
-[gd_scene load_steps=9 format=3 uid="uid://bqyxsn7hxvf7h"]
+[gd_scene load_steps=11 format=3 uid="uid://bqyxsn7hxvf7h"]
 
 [ext_resource type="Script" uid="uid://cn342iexxqcl4" path="res://scenes/main.gd" id="1_main_script"]
 [ext_resource type="PackedScene" uid="uid://b7j8lam3n4p5q" path="res://scenes/environment/procedural_slope.tscn" id="1_procedural_slope"]
 [ext_resource type="PackedScene" uid="uid://c6xj3q8pxr7kv" path="res://scenes/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/ui/difficulty_selector.tscn" id="3_difficulty_selector"]
 [ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="4_free_camera"]
+[ext_resource type="Script" uid="uid://bb5gwfvikxmqg" path="res://scripts/ui/minimap.gd" id="5_minimap"]
+[ext_resource type="Script" uid="uid://by0ffl8q2xtoe" path="res://scripts/ui/density_controls.gd" id="6_density_controls"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -43,3 +45,11 @@ script = ExtResource("4_free_camera")
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="DifficultySelector" parent="UI" instance=ExtResource("3_difficulty_selector")]
+
+[node name="Minimap" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("5_minimap")
+
+[node name="DensityControls" type="VBoxContainer" parent="UI"]
+script = ExtResource("6_density_controls")

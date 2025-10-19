@@ -76,6 +76,20 @@ ski-boarder/
   - Heightmap 및 Mesh 빌딩
   - 난이도 시스템 (Easy/Medium/Hard)
   - 충돌 레이어 설정
+  - 눈 재질 및 조명 설정
+
+- **[OBSTACLES.md](./OBSTACLES.md)** - 장애물 시스템 가이드
+  - 장애물 생성 및 배치 (나무, 풀, 바위)
+  - 밀도 모드 (Sparse/Normal/Dense)
+  - 물리 충돌 및 지형 스냅
+  - 3D 라벨 시스템
+  - 미니맵 시각화
+
+- **[UI.md](./UI.md)** - UI 시스템 가이드
+  - 난이도 선택기 (Easy/Medium/Hard)
+  - 장애물 밀도 컨트롤 (Sparse/Normal/Dense)
+  - 미니맵 (플레이어 위치, 장애물 표시)
+  - HUD (속도, 카메라 모드)
 
 ### 설정 및 참고
 - **[PROJECT_SETUP.md](./PROJECT_SETUP.md)** - 프로젝트 초기 설정

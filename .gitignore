@@ -54,3 +54,6 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+
+# Claude AI prompt files (keep locally, don't commit)
+ADD.md

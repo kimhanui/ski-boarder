@@ -52,6 +52,9 @@ const JUMP_ARM_RAISE_ANGLE = 45.0  # Arms raised angle during launch
 @onready var camera_mode_label = $UI/CameraModeLabel
 @onready var speed_label = $UI/SpeedLabel
 
+# Systems
+@onready var ski_tracks = $SkiTracks
+
 # Camera mode
 var camera_mode = 0
 
@@ -96,6 +99,10 @@ func _ready() -> void:
 	_on_camera_mode_changed(_get_camera_mode_name())
 	spawn_position = global_position
 	spawn_rotation = rotation.y
+
+	# Connect ski tracks to player
+	if ski_tracks:
+		ski_tracks.player = self
 
 
 func _physics_process(delta: float) -> void:

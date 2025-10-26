@@ -166,7 +166,7 @@ func _create_multimesh_instances() -> void:
 	grass_multimesh.multimesh = MultiMesh.new()
 	grass_multimesh.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	grass_multimesh.multimesh.mesh = grass_mesh
-	grass_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	grass_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(grass_multimesh)
 
 	# Rocks (mixed sizes)
@@ -535,7 +535,7 @@ func _create_obstacle_scene(type: String, rng: RandomNumberGenerator) -> Node3D:
 		# Create grass mesh instance
 		var mesh_instance = MeshInstance3D.new()
 		mesh_instance.mesh = grass_mesh
-		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		obstacle.add_child(mesh_instance)
 		obstacle.name = "Grass"
 

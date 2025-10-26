@@ -1,0 +1,29 @@
+root = true
+
+# Default settings for all files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Godot project files - DO NOT auto-format
+# These files are managed by Godot Editor and should not be modified by linters
+[*.{tscn,godot,tres,import}]
+indent_style = unset
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# GDScript files - use tabs
+[*.gd]
+indent_style = tab
+indent_size = 4
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 2

@@ -8,9 +8,13 @@ extends Node3D
 @onready var difficulty_selector: Control = $UI/DifficultySelector
 @onready var minimap: Control = $UI/Minimap
 @onready var density_controls: VBoxContainer = $UI/DensityControls
+@onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 
 
 func _ready() -> void:
+	# Force DirectionalLight3D shadow settings (prevent Godot editor from removing them)
+	_enforce_shadow_settings()
+
 	# Connect UI signals
 	if difficulty_selector:
 		difficulty_selector.difficulty_changed.connect(_on_difficulty_changed)
@@ -33,6 +37,22 @@ func _ready() -> void:
 
 	print("Main scene initialized")
 	print("Press F1 to cycle camera modes")
+
+
+## Enforce shadow settings at runtime (prevent Godot editor auto-removal)
+func _enforce_shadow_settings() -> void:
+	if directional_light:
+		directional_light.shadow_enabled = true
+		directional_light.shadow_opacity = 1.0
+		directional_light.shadow_bias = 0.1
+		directional_light.shadow_normal_bias = 1.0
+		directional_light.directional_shadow_max_distance = 3000.0
+		directional_light.directional_shadow_fade_start = 0.8
+		print("[Main] Shadow settings enforced: enabled=%s, opacity=%.1f, bias=%.2f" % [
+			directional_light.shadow_enabled,
+			directional_light.shadow_opacity,
+			directional_light.shadow_bias
+		])
 
 
 func _on_difficulty_changed(new_difficulty: String) -> void:

@@ -13,9 +13,11 @@ height = 0.5
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_skin"]
 albedo_color = Color(1, 0.9, 0.8, 1)
+emission_intensity = 1000.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
+emission_intensity = 1000.0
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
 radius = 0.25
@@ -23,6 +25,7 @@ height = 0.8
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jacket"]
 albedo_color = Color(0.2, 0.4, 0.8, 1)
+emission_intensity = 1000.0
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_limb"]
 radius = 0.08
@@ -37,6 +40,7 @@ height = 1.2
 albedo_color = Color(0.3, 0.3, 0.3, 1)
 metallic = 0.7
 roughness = 0.3
+emission_intensity = 1000.0
 
 [sub_resource type="PrismMesh" id="PrismMesh_ski"]
 left_to_right = 0.0
@@ -44,6 +48,7 @@ size = Vector3(0.15, 0.05, 1.2)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ski"]
 albedo_color = Color(0.9, 0.1, 0.1, 1)
+emission_intensity = 1000.0
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_snow"]
 direction = Vector3(0, -1, -1)
@@ -126,6 +131,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
 
+[node name="SkiRayCast" type="RayCast3D" parent="Body/LeftLeg/Ski"]
+target_position = Vector3(0, -0.5, 0)
+collision_mask = 2
+
 [node name="RightLeg" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, -0.3, 0)
 
@@ -143,6 +152,10 @@ surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
+
+[node name="SkiRayCast" type="RayCast3D" parent="Body/RightLeg/Ski"]
+target_position = Vector3(0, -0.5, 0)
+collision_mask = 2
 
 [node name="Camera3D_ThirdPerson" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 3, 5)
@@ -180,6 +193,42 @@ offset_right = 400.0
 offset_bottom = 70.0
 theme_override_font_sizes/font_size = 20
 text = "속도: 0.0 m/s"
+
+[node name="TrickGuideLabel" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 100.0
+offset_right = 1000.0
+offset_bottom = 160.0
+theme_override_font_sizes/font_size = 16
+text = "공중 트릭 가이드"
+autowrap_mode = 3
+
+[node name="TrickDisplayLabel" type="Label" parent="UI"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -150.0
+offset_right = 300.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 48
+text = "TRICK NAME"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TrickModeButton" type="Button" parent="UI"]
+offset_left = 10.0
+offset_top = 170.0
+offset_right = 180.0
+offset_bottom = 210.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+toggle_mode = true
+text = "트릭 모드: OFF"
 
 [node name="SkiTracks" type="Node3D" parent="."]
 script = ExtResource("3_ski_tracks")

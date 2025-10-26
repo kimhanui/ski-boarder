@@ -258,18 +258,20 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 
 	# Create material with sparkling snow properties
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 1.0, 1.0)  # Pure white for bright snow
-	material.roughness = 0.3  # Smooth surface for reflective sparkle
+	material.albedo_color = Color(0.95, 0.95, 0.98)  # Bright snow with slight blue tint
+	material.roughness = 0.4  # Smooth surface for reflective sparkle
 	material.metallic = 0.0
 	material.emission_enabled = true
-	material.emission = Color(0.15, 0.15, 0.2)  # Subtle blue-white glow
-	material.emission_energy_multiplier = 0.5  # Gentle emission
+	material.emission = Color(0.9, 0.9, 0.95)  # Subtle cool emission for snow glow
+	material.emission_energy_multiplier = 0.15  # Very gentle emission
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	array_mesh.surface_set_material(0, material)
 
 	# Create MeshInstance3D
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = array_mesh
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC  # Enable shadow reception from player/obstacles
 	mesh_instance.name = "TerrainMesh"
 
 	# Create StaticBody3D with collision

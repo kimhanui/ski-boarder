@@ -29,6 +29,25 @@ const JUMP_LAUNCH_DURATION = 0.4  # Launch animation (seconds)
 const JUMP_CROUCH_AMOUNT = 0.15  # How much to lower body when crouching
 const JUMP_ARM_RAISE_ANGLE = 45.0  # Arms raised angle during launch
 
+# Air trick physics constants (ADD.md spec)
+const AIR_YAW_SPEED_MAX = 240.0  # deg/s - spin speed
+const AIR_ROLL_RATE = 120.0  # deg/s - roll rate
+const AIR_ROLL_MAX = 40.0  # deg - maximum roll angle
+const AIR_PITCH_TARGET = 30.0  # deg - pitch forward/back target
+const GRAB_MIN_FRAMES = 6  # Minimum frames to hold grab
+const LAND_ROLL_THRESHOLD = 12.0  # deg - max roll for safe landing
+const LAND_PITCH_THRESHOLD = 18.0  # deg - max pitch for safe landing
+
+# Carving/steering constants (new physics-based turning)
+const STEER_YAW_RATE = 90.0  # deg/s - how fast ski yaw changes with A/D input
+const SKI_YAW_MAX = 18.0  # deg - maximum ski yaw angle (normal)
+const SKI_YAW_MAX_BOOST = 22.0  # deg - maximum ski yaw when accelerating
+const SKI_ROLL_MAX = 6.0  # deg - maximum ski roll (carving edge)
+const TORSO_ROLL_COEFFICIENT = 0.6  # Torso roll is 60% of ski yaw (reduced from 100%)
+const BODY_YAW_FOLLOW = 0.7  # Body yaw follows ski yaw at 70%
+const VELOCITY_HEADING_LERP = 0.1  # How fast velocity heading follows ski yaw
+const STEER_YAW_DAMPING = 0.92  # Damping factor when no input (0.92 = 8% decay per frame)
+
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
 @onready var camera_third_person_front = $Camera3D_ThirdPersonFront
@@ -48,9 +67,16 @@ const JUMP_ARM_RAISE_ANGLE = 45.0  # Arms raised angle during launch
 @onready var left_eye = $Body/Head/LeftEye
 @onready var right_eye = $Body/Head/RightEye
 
+# Ski raycasts for ground contact
+@onready var left_ski_raycast = $Body/LeftLeg/Ski/SkiRayCast
+@onready var right_ski_raycast = $Body/RightLeg/Ski/SkiRayCast
+
 # UI references
 @onready var camera_mode_label = $UI/CameraModeLabel
 @onready var speed_label = $UI/SpeedLabel
+@onready var trick_guide_label = $UI/TrickGuideLabel
+@onready var trick_display_label = $UI/TrickDisplayLabel
+@onready var trick_mode_button = $UI/TrickModeButton
 
 # Systems
 @onready var ski_tracks = $SkiTracks
@@ -58,8 +84,13 @@ const JUMP_ARM_RAISE_ANGLE = 45.0  # Arms raised angle during launch
 # Camera mode
 var camera_mode = 0
 
-# Signal
+# Trick mode toggle
+var trick_mode_enabled: bool = false  # Default: OFF
+
+# Signals
 signal camera_mode_changed(mode_name: String)
+signal trick_performed(trick_name: String)
+signal trick_mode_changed(enabled: bool)
 
 # Animation state
 var current_tilt = 0.0
@@ -90,6 +121,29 @@ var skating_phase = 0.0
 var spawn_position: Vector3
 var spawn_rotation: float
 
+# Trick system state
+var current_trick: String = ""
+var trick_display_timer: float = 0.0
+const TRICK_DISPLAY_DURATION = 2.0  # Display trick name for 2 seconds
+var air_input_detected: Dictionary = {
+	"forward": false,
+	"back": false,
+	"left": false,
+	"right": false,
+	"grab": false
+}
+
+# Air trick physics (ADD.md spec)
+var air_yaw: float = 0.0  # Accumulated yaw rotation (Y-axis spin)
+var air_roll: float = 0.0  # Body roll (Z-axis tilt)
+var air_pitch: float = 0.0  # Body pitch (X-axis front/back)
+var grab_frames: int = 0  # Frames grab is held
+var can_land_safely: bool = true  # Landing safety flag
+
+# Carving/steering state (new physics-based turning)
+var steer_yaw: float = 0.0  # Current ski yaw angle in degrees (-SKI_YAW_MAX to +SKI_YAW_MAX)
+var velocity_heading: float = 0.0  # Current velocity heading in radians
+
 
 func _ready() -> void:
 	add_to_group("player")
@@ -100,9 +154,40 @@ func _ready() -> void:
 	spawn_position = global_position
 	spawn_rotation = rotation.y
 
+	# Initialize velocity heading to match current rotation
+	velocity_heading = rotation.y
+
 	# Connect ski tracks to player
 	if ski_tracks:
 		ski_tracks.player = self
+
+	# Initialize trick UI
+	_initialize_trick_ui()
+
+	# Connect trick mode button with forced initialization
+	if trick_mode_button:
+		# Force button properties (prevent scene file issues)
+		trick_mode_button.disabled = false
+		trick_mode_button.mouse_filter = Control.MOUSE_FILTER_STOP
+		trick_mode_button.button_pressed = trick_mode_enabled
+
+		# Connect signal
+		trick_mode_button.toggled.connect(_on_trick_mode_toggled)
+
+		# Update UI to match initial state
+		_update_trick_mode_ui()
+
+		print("[BUTTON INIT] Trick mode button initialized:")
+		print("  - Disabled: ", trick_mode_button.disabled)
+		print("  - Mouse Filter: ", trick_mode_button.mouse_filter)
+		print("  - Button Pressed: ", trick_mode_button.button_pressed)
+		print("  - Trick Mode Enabled: ", trick_mode_enabled)
+
+	# Ensure mouse is visible for UI interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	# Enable shadows for all player meshes
+	_enable_player_shadows()
 
 
 func _physics_process(delta: float) -> void:
@@ -116,28 +201,84 @@ func _physics_process(delta: float) -> void:
 	# Handle jump state machine
 	_update_jump_state(delta)
 
-	# Handle jump input - start crouch animation
+	# Handle jump input
 	if Input.is_action_just_pressed("jump") and is_on_floor() and jump_state == JumpState.GROUNDED:
-		jump_state = JumpState.CROUCHING
-		jump_timer = 0.0
+		if trick_mode_enabled:
+			# Trick mode ON: use full jump animation (crouch → launch → air)
+			jump_state = JumpState.CROUCHING
+			jump_timer = 0.0
+		else:
+			# Trick mode OFF: simple jump (direct to airborne)
+			velocity.y = JUMP_VELOCITY
+			jump_state = JumpState.AIRBORNE
+			was_in_air = true
+
+	# Detect trick inputs in the air (only if trick mode enabled)
+	if jump_state == JumpState.AIRBORNE and trick_mode_enabled:
+		_detect_trick_inputs()
+	else:
+		# Reset air inputs when grounded or trick mode disabled
+		_reset_air_inputs()
+
+	# Force reset body rotations when trick mode is OFF (only in air, only Z rotation)
+	if not trick_mode_enabled and jump_state == JumpState.AIRBORNE:
+		if body:
+			# Keep Y rotation for turning, only reset Z (roll from tricks)
+			body.rotation_degrees.z = 0.0
+		# Reset all body part rotations
+		if torso:
+			torso.rotation_degrees.x = 0.0
+		if left_arm and right_arm:
+			left_arm.rotation_degrees.x = 0.0
+			right_arm.rotation_degrees.x = 0.0
+			left_arm.position.x = -0.35
+			right_arm.position.x = 0.35
+		if left_leg and right_leg:
+			left_leg.rotation_degrees.x = 0.0
+			right_leg.rotation_degrees.x = 0.0
+
+	# Update trick display timer
+	_update_trick_display(delta)
 
 	# Get input
 	var turn_input = Input.get_axis("move_left", "move_right")
 	var is_moving_forward = Input.is_action_pressed("move_forward")
 	var is_braking = Input.is_action_pressed("move_back")
 
-	# Handle rotation
-	if turn_input != 0 and current_speed >= MIN_TURN_SPEED:
-		body.rotate_y(-turn_input * TURN_SPEED * delta)
+	# A/D CONTROL: Trick mode ON = carving, OFF = simple rotation (PLAYER.MD)
+	if current_speed >= MIN_TURN_SPEED and not is_braking:
+		if trick_mode_enabled:
+			# TRICK MODE ON: Carving system (current behavior)
+			var target_ski_yaw_max = SKI_YAW_MAX
+			if is_moving_forward:
+				target_ski_yaw_max = SKI_YAW_MAX_BOOST
 
-	# V2: Enhanced turn animation with weight shift
-	if current_speed >= MIN_TURN_SPEED:
-		target_tilt = -turn_input * TILT_AMOUNT
-		# V2: Add weight shift (COM shift) during turns
-		_apply_weight_shift(turn_input, delta)
-		# V2: Add ski edge effect during turns
-		_apply_ski_edge_effect(turn_input, delta)
+			if turn_input != 0:
+				steer_yaw += turn_input * STEER_YAW_RATE * delta
+				steer_yaw = clamp(steer_yaw, -target_ski_yaw_max, target_ski_yaw_max)
+			else:
+				steer_yaw *= STEER_YAW_DAMPING
+				if abs(steer_yaw) < 0.5:
+					steer_yaw = 0.0
+
+			_apply_ski_carving(steer_yaw, delta)
+			_update_velocity_heading(delta)
+			_update_body_yaw_follow(delta)
+			target_tilt = -steer_yaw * TORSO_ROLL_COEFFICIENT
+			_apply_weight_shift(turn_input, delta)
+		else:
+			# TRICK MODE OFF: Simple Y-axis rotation (PLAYER.MD spec)
+			if turn_input != 0:
+				rotation.y += -turn_input * TURN_SPEED * delta
+
+			target_tilt = -turn_input * TILT_AMOUNT
+			_apply_weight_shift(turn_input, delta)
 	else:
+		# Below min speed or braking: reset
+		if trick_mode_enabled:
+			steer_yaw = 0.0
+			_reset_ski_carving(delta)
+
 		target_tilt = 0.0
 		_reset_weight_shift(delta)
 
@@ -222,16 +363,27 @@ func _physics_process(delta: float) -> void:
 	else:
 		current_speed = max(current_speed - FRICTION * delta, 0.0)
 
-	# Gradually align player rotation with body rotation
+	# VELOCITY: Trick mode ON = velocity_heading, OFF = transform.basis (PLAYER.MD)
 	if current_speed > 0:
-		var body_y_rotation = body.rotation.y
-		rotation.y = lerp_angle(rotation.y, rotation.y + body_y_rotation, 2.0 * delta)
-		body.rotation.y = lerp_angle(body.rotation.y, 0, 2.0 * delta)
+		if trick_mode_enabled:
+			# TRICK MODE ON: Use velocity_heading (carving system)
+			var velocity_dir = Vector3(-sin(velocity_heading), 0, -cos(velocity_heading))
+			velocity.x = velocity_dir.x * current_speed
+			velocity.z = velocity_dir.z * current_speed
+			rotation.y = velocity_heading
+		else:
+			# TRICK MODE OFF: Use transform.basis (PLAYER.MD spec)
+			var forward_dir = -transform.basis.z
+			velocity.x = forward_dir.x * current_speed
+			velocity.z = forward_dir.z * current_speed
 
-	# Apply speed in player's forward direction
-	var forward_dir = -transform.basis.z
-	velocity.x = forward_dir.x * current_speed
-	velocity.z = forward_dir.z * current_speed
+			# Gradually align player rotation with body rotation (PLAYER.MD spec)
+			var body_y_rotation = body.rotation.y
+			rotation.y = lerp_angle(rotation.y, rotation.y + body_y_rotation, 2.0 * delta)
+			body.rotation.y = lerp_angle(body.rotation.y, 0, 2.0 * delta)
+	else:
+		velocity.x = 0.0
+		velocity.z = 0.0
 
 	# Apply physics
 	move_and_slide()
@@ -279,10 +431,11 @@ func _update_jump_state(delta: float) -> void:
 			jump_crouch_progress = 0.0
 			jump_launch_progress = 1.0
 
-			# When landing, transition to grounded
-			if is_on_floor():
+			# Check landing conditions (ADD.md spec)
+			if _can_land_safely():
 				jump_state = JumpState.LANDING
 				jump_timer = 0.0
+				print("[LANDING] Safe landing! Roll: %.1f°, Pitch: %.1f°" % [air_roll, air_pitch])
 
 		JumpState.LANDING:
 			jump_timer += delta
@@ -302,6 +455,10 @@ func _update_jump_state(delta: float) -> void:
 func _apply_jump_animation() -> void:
 	if jump_state == JumpState.GROUNDED:
 		return  # No jump animation needed
+
+	# Skip jump animations when trick mode is OFF
+	if not trick_mode_enabled:
+		return
 
 	# Calculate body height offset (crouch down, then neutral)
 	var body_offset_y = 0.0
@@ -616,4 +773,403 @@ func respawn() -> void:
 	# Reset body position
 	body.position.y = 0.0
 
+	# Reset trick system
+	current_trick = ""
+	trick_display_timer = 0.0
+	_reset_air_inputs()
+
+	# Reset carving system
+	steer_yaw = 0.0
+	velocity_heading = rotation.y
+
 	print("Player (V2) respawned at: ", spawn_position)
+
+
+## Detect trick inputs during airborne state (ADD.md spec)
+func _detect_trick_inputs() -> void:
+	# Early exit if trick mode disabled
+	if not trick_mode_enabled:
+		return
+
+	var delta = get_physics_process_delta_time()
+
+	# A/D → Yaw (spin) + Roll (bank)
+	if Input.is_action_pressed("move_left"):
+		air_yaw += AIR_YAW_SPEED_MAX * delta  # Spin left (positive Y rotation)
+		air_roll = clamp(air_roll + AIR_ROLL_RATE * 0.25 * delta, -AIR_ROLL_MAX, AIR_ROLL_MAX)
+	if Input.is_action_pressed("move_right"):
+		air_yaw -= AIR_YAW_SPEED_MAX * delta  # Spin right (negative Y rotation)
+		air_roll = clamp(air_roll - AIR_ROLL_RATE * 0.25 * delta, -AIR_ROLL_MAX, AIR_ROLL_MAX)
+
+	# W/S → Pitch (forward/back flip)
+	if Input.is_action_pressed("move_forward"):
+		air_pitch = lerp(air_pitch, AIR_PITCH_TARGET, 0.1)  # Pitch forward
+	elif Input.is_action_pressed("move_back"):
+		air_pitch = lerp(air_pitch, -AIR_PITCH_TARGET, 0.1)  # Pitch back
+	else:
+		air_pitch = lerp(air_pitch, 0.0, 0.12)  # Return to neutral
+
+	# Space → Grab
+	if Input.is_action_pressed("jump"):
+		grab_frames += 1
+	else:
+		grab_frames = max(grab_frames - 2, 0)
+
+	# Apply physical rotations to body
+	_apply_air_trick_rotations()
+
+	# Determine current trick name for UI
+	var trick_name = _determine_trick_from_physics()
+	if trick_name != "" and trick_name != current_trick:
+		_trigger_trick(trick_name)
+
+
+## Apply air trick rotations to body (ADD.md spec)
+func _apply_air_trick_rotations() -> void:
+	# Apply additive rotations to Body node
+	# Note: Body.rotation is LOCAL to Player node
+
+	# Yaw (Y-axis spin) - rotate entire body
+	body.rotation.y = deg_to_rad(air_yaw)
+
+	# Roll (Z-axis bank) - body tilt left/right
+	body.rotation_degrees.z = air_roll
+
+	# Pitch (X-axis flip) - forward/back rotation
+	# ADD.md: Apply to Torso, Arms, Legs (not Head!)
+	torso.rotation_degrees.x = air_pitch
+
+	# Grab animation (ADD.md spec) - arms reach toward skis
+	var grab_weight = clamp(grab_frames / float(GRAB_MIN_FRAMES), 0.0, 1.0)
+	if grab_weight > 0.0:
+		# Arms reach down toward skis (additive to pitch)
+		var grab_arm_angle = 60.0 * grab_weight  # Reach down 60°
+		left_arm.rotation_degrees.x = air_pitch + grab_arm_angle
+		right_arm.rotation_degrees.x = air_pitch + grab_arm_angle
+
+		# Arms move slightly inward (toward skis)
+		var grab_arm_inward = 0.1 * grab_weight
+		left_arm.position.x = -0.35 + grab_arm_inward  # Original: -0.35
+		right_arm.position.x = 0.35 - grab_arm_inward  # Original: 0.35
+	else:
+		# Normal arm rotation (no grab)
+		left_arm.rotation_degrees.x = air_pitch
+		right_arm.rotation_degrees.x = air_pitch
+		# Reset arm positions
+		left_arm.position.x = -0.35
+		right_arm.position.x = 0.35
+
+	# Legs pitch slightly less for natural look
+	left_leg.rotation_degrees.x = air_pitch * 0.5
+	right_leg.rotation_degrees.x = air_pitch * 0.5
+
+	# Head NEVER rotates - only small translation (ADD.md constraint)
+	head.rotation = Vector3.ZERO
+	# Small forward translation based on pitch
+	var head_forward_offset = -air_pitch * 0.01  # Subtle forward lean
+	head.position.z = head_forward_offset
+
+
+## Determine trick name from physics state (ADD.md spec)
+func _determine_trick_from_physics() -> String:
+	var is_spinning = abs(air_yaw) > 45.0  # Spinning if > 45° total
+	var is_rolling = abs(air_roll) > 10.0  # Rolling if > 10°
+	var is_pitching_fwd = air_pitch > 10.0
+	var is_pitching_back = air_pitch < -10.0
+	var is_grabbing = grab_frames >= GRAB_MIN_FRAMES
+
+	# Combination tricks
+	if is_grabbing and is_pitching_fwd:
+		return "NOSE GRAB"
+	if is_grabbing and is_pitching_back:
+		return "TAIL GRAB"
+	if is_grabbing and (is_spinning or is_rolling):
+		return "GRAB + TWIST"
+
+	if is_pitching_fwd and is_spinning and air_yaw > 0:
+		return "CORKSCREW LEFT"
+	if is_pitching_fwd and is_spinning and air_yaw < 0:
+		return "CORKSCREW RIGHT"
+	if is_pitching_back and is_spinning and air_yaw > 0:
+		return "BACKROLL LEFT"
+	if is_pitching_back and is_spinning and air_yaw < 0:
+		return "BACKROLL RIGHT"
+
+	# Single tricks
+	if is_spinning and air_yaw > 0:
+		var spins = int(abs(air_yaw) / 180.0)
+		return "SPIN LEFT " + str(spins * 180) + "°"
+	if is_spinning and air_yaw < 0:
+		var spins = int(abs(air_yaw) / 180.0)
+		return "SPIN RIGHT " + str(spins * 180) + "°"
+	if is_pitching_fwd:
+		return "PITCH FORWARD"
+	if is_pitching_back:
+		return "PITCH BACK"
+	if is_grabbing:
+		return "GRAB"
+
+	return ""
+
+
+## Trigger a trick (display and emit signal)
+func _trigger_trick(trick_name: String) -> void:
+	current_trick = trick_name
+	trick_display_timer = TRICK_DISPLAY_DURATION
+	trick_performed.emit(trick_name)
+
+	# Update display immediately
+	if trick_display_label:
+		trick_display_label.text = trick_name
+		trick_display_label.visible = true
+
+
+## Update trick display timer and fade out
+func _update_trick_display(delta: float) -> void:
+	if trick_display_timer > 0.0:
+		trick_display_timer -= delta
+
+		if trick_display_timer <= 0.0:
+			# Hide trick display
+			if trick_display_label:
+				trick_display_label.visible = false
+			current_trick = ""
+
+
+## Reset air input tracking and physics
+func _reset_air_inputs() -> void:
+	air_input_detected["forward"] = false
+	air_input_detected["back"] = false
+	air_input_detected["left"] = false
+	air_input_detected["right"] = false
+	air_input_detected["grab"] = false
+
+	# Reset air physics
+	air_yaw = 0.0
+	air_roll = 0.0
+	air_pitch = 0.0
+	grab_frames = 0
+
+	# Reset body rotations (when trick mode disabled or landed)
+	if body:
+		body.rotation.y = 0.0
+		body.rotation_degrees.z = 0.0
+
+	# Reset arm positions from grab
+	if left_arm and right_arm:
+		left_arm.position.x = -0.35
+		right_arm.position.x = 0.35
+
+
+## Check if safe landing is possible (ADD.md spec for trick mode, instant for original)
+func _can_land_safely() -> bool:
+	# 트릭 모드 OFF: 원본처럼 바로 착지 (is_on_floor()만 체크)
+	if not trick_mode_enabled:
+		return is_on_floor() and velocity.y <= 0.0
+
+	# 트릭 모드 ON: ADD.md spec 적용
+	# Must be descending
+	if velocity.y > 0.0:
+		return false
+
+	# Check ground contact using raycasts
+	var left_grounded = left_ski_raycast and left_ski_raycast.is_colliding()
+	var right_grounded = right_ski_raycast and right_ski_raycast.is_colliding()
+
+	if not (left_grounded or right_grounded):
+		return false
+
+	# Check angle limits (ADD.md spec)
+	var roll_ok = abs(air_roll) <= LAND_ROLL_THRESHOLD  # ±12°
+	var pitch_ok = abs(air_pitch) <= LAND_PITCH_THRESHOLD  # ±18°
+
+	can_land_safely = roll_ok and pitch_ok
+
+	# Unsafe landing warning
+	if not can_land_safely:
+		print("[WARNING] Unsafe landing! Roll: %.1f° (max %.1f°), Pitch: %.1f° (max %.1f°)" % [
+			air_roll, LAND_ROLL_THRESHOLD,
+			air_pitch, LAND_PITCH_THRESHOLD
+		])
+
+	return (left_grounded or right_grounded) and can_land_safely
+
+
+## Initialize trick UI with guide text
+func _initialize_trick_ui() -> void:
+	# Set up trick guide (always visible)
+	if trick_guide_label:
+		var guide_text = "공중 트릭: W=전방기울임 | S=후방기울임 | A=좌회전 | D=우회전 | Space=그랩\n"
+		guide_text += "조합 트릭: W+A/D=코크스크류 | S+A/D=백롤 | Space+W=노즈그랩 | Space+S=테일그랩"
+		trick_guide_label.text = guide_text
+		trick_guide_label.visible = trick_mode_enabled
+
+	# Set up trick display (hidden by default)
+	if trick_display_label:
+		trick_display_label.text = ""
+		trick_display_label.visible = false
+
+
+## Update trick mode UI elements
+func _update_trick_mode_ui() -> void:
+	if trick_mode_button:
+		trick_mode_button.text = "트릭 모드: ON" if trick_mode_enabled else "트릭 모드: OFF"
+	if trick_guide_label:
+		trick_guide_label.visible = trick_mode_enabled
+
+
+## Handle trick mode toggle button
+func _on_trick_mode_toggled(button_pressed: bool) -> void:
+	print("========================================")
+	print("[TRICK MODE TOGGLE] Button clicked!")
+	print("  Previous state: ", "ON" if trick_mode_enabled else "OFF")
+	print("  New state: ", "ON" if button_pressed else "OFF")
+	print("========================================")
+
+	trick_mode_enabled = button_pressed
+
+	# Synchronize velocity_heading when switching modes
+	if trick_mode_enabled:
+		# Switching to TRICK MODE ON: sync velocity_heading to current rotation
+		velocity_heading = rotation.y
+		print("[TRICK MODE] → ON")
+		print("  - Carving system: ENABLED")
+		print("  - Air tricks: ENABLED")
+		print("  - Jump animation: ENABLED (crouch → launch)")
+	else:
+		# Switching to TRICK MODE OFF: reset carving state
+		steer_yaw = 0.0
+		velocity_heading = rotation.y
+		print("[TRICK MODE] → OFF")
+		print("  - Simple rotation: ENABLED")
+		print("  - Air tricks: DISABLED")
+		print("  - Jump animation: DISABLED (instant jump)")
+
+	# Update UI elements
+	_update_trick_mode_ui()
+	print("  - Button text updated: ", trick_mode_button.text if trick_mode_button else "N/A")
+	print("  - Trick guide visible: ", trick_guide_label.visible if trick_guide_label else false)
+
+	# Hide trick display when disabled
+	if not trick_mode_enabled and trick_display_label:
+		trick_display_label.visible = false
+
+	# Reset air physics when disabling
+	if not trick_mode_enabled:
+		_reset_air_inputs()
+		print("  - Air physics reset")
+
+	# Emit signal
+	trick_mode_changed.emit(trick_mode_enabled)
+
+	print("========================================")
+
+## NEW CARVING SYSTEM: Apply ski yaw rotation and roll (edge carving)
+func _apply_ski_carving(ski_yaw_deg: float, delta: float) -> void:
+	# Ski yaw: both skis rotate together in Y-axis (steering direction)
+	left_ski.rotation_degrees.y = ski_yaw_deg
+	right_ski.rotation_degrees.y = ski_yaw_deg
+	
+	# Ski roll (Z-axis): carving edge effect
+	# Left turn (negative yaw) → lean left (negative roll)
+	# Right turn (positive yaw) → lean right (positive roll)
+	var ski_roll_deg = ski_yaw_deg * 0.3  # Roll is 30% of yaw
+	ski_roll_deg = clamp(ski_roll_deg, -SKI_ROLL_MAX, SKI_ROLL_MAX)
+	
+	# Outer ski gets more roll (weighted leg)
+	if ski_yaw_deg < 0:  # Left turn
+		left_ski.rotation_degrees.z = ski_roll_deg * 1.5  # Inner ski
+		right_ski.rotation_degrees.z = ski_roll_deg  # Outer ski
+	elif ski_yaw_deg > 0:  # Right turn
+		right_ski.rotation_degrees.z = ski_roll_deg * 1.5  # Inner ski
+		left_ski.rotation_degrees.z = ski_roll_deg  # Outer ski
+	else:
+		left_ski.rotation_degrees.z = 0.0
+		right_ski.rotation_degrees.z = 0.0
+
+
+## NEW CARVING SYSTEM: Reset ski carving to neutral
+func _reset_ski_carving(delta: float) -> void:
+	# Smoothly reset ski rotations
+	left_ski.rotation_degrees.y = lerp(left_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
+	right_ski.rotation_degrees.y = lerp(right_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
+	left_ski.rotation_degrees.z = lerp(left_ski.rotation_degrees.z, 0.0, ANIMATION_SPEED * delta)
+	right_ski.rotation_degrees.z = lerp(right_ski.rotation_degrees.z, 0.0, ANIMATION_SPEED * delta)
+
+
+## NEW CARVING SYSTEM: Update velocity heading to follow ski yaw
+func _update_velocity_heading(delta: float) -> void:
+	# Convert steer_yaw (degrees) to target heading (radians)
+	# Note: Godot Y-axis rotation: 0 = forward (-Z), PI/2 = left (+X), -PI/2 = right (-X)
+	# steer_yaw: positive = right turn, negative = left turn
+	var ski_yaw_rad = deg_to_rad(-steer_yaw)  # Negate to match Godot rotation
+	var target_heading = rotation.y + ski_yaw_rad
+	
+	# Smoothly lerp velocity_heading toward target
+	velocity_heading = lerp_angle(velocity_heading, target_heading, VELOCITY_HEADING_LERP)
+
+
+## NEW CARVING SYSTEM: Update body yaw to partially follow ski direction
+func _update_body_yaw_follow(delta: float) -> void:
+	# Body yaw follows ski yaw direction (visual feedback)
+	var target_body_yaw = deg_to_rad(steer_yaw * BODY_YAW_FOLLOW)
+	body.rotation.y = lerp_angle(body.rotation.y, target_body_yaw, ANIMATION_SPEED * delta)
+
+
+## Enable shadows for all player meshes (runtime configuration)
+func _enable_player_shadows() -> void:
+	# Collect all MeshInstance3D nodes in player body
+	var mesh_nodes = []
+
+	# Add all body part meshes
+	if head and head is MeshInstance3D:
+		mesh_nodes.append(head)
+	if torso and torso is MeshInstance3D:
+		mesh_nodes.append(torso)
+
+	# Arms and ski poles
+	if left_arm:
+		var left_upper_arm = left_arm.get_node_or_null("UpperArm")
+		var left_pole = left_arm.get_node_or_null("SkiPole")
+		if left_upper_arm and left_upper_arm is MeshInstance3D:
+			mesh_nodes.append(left_upper_arm)
+		if left_pole and left_pole is MeshInstance3D:
+			mesh_nodes.append(left_pole)
+
+	if right_arm:
+		var right_upper_arm = right_arm.get_node_or_null("UpperArm")
+		var right_pole = right_arm.get_node_or_null("SkiPole")
+		if right_upper_arm and right_upper_arm is MeshInstance3D:
+			mesh_nodes.append(right_upper_arm)
+		if right_pole and right_pole is MeshInstance3D:
+			mesh_nodes.append(right_pole)
+
+	# Legs and skis
+	if left_leg:
+		var left_upper_leg = left_leg.get_node_or_null("UpperLeg")
+		var left_lower_leg = left_leg.get_node_or_null("LowerLeg")
+		if left_upper_leg and left_upper_leg is MeshInstance3D:
+			mesh_nodes.append(left_upper_leg)
+		if left_lower_leg and left_lower_leg is MeshInstance3D:
+			mesh_nodes.append(left_lower_leg)
+
+	if right_leg:
+		var right_upper_leg = right_leg.get_node_or_null("UpperLeg")
+		var right_lower_leg = right_leg.get_node_or_null("LowerLeg")
+		if right_upper_leg and right_upper_leg is MeshInstance3D:
+			mesh_nodes.append(right_upper_leg)
+		if right_lower_leg and right_lower_leg is MeshInstance3D:
+			mesh_nodes.append(right_lower_leg)
+
+	# Skis
+	if left_ski and left_ski is MeshInstance3D:
+		mesh_nodes.append(left_ski)
+	if right_ski and right_ski is MeshInstance3D:
+		mesh_nodes.append(right_ski)
+
+	# Enable shadows for all collected meshes
+	for node in mesh_nodes:
+		if node:
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	print("[Player] Shadows enabled for %d meshes" % mesh_nodes.size())

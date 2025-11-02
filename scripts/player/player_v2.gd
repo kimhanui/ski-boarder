@@ -1172,4 +1172,9 @@ func _enable_player_shadows() -> void:
 		if node:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	print("[Player] Shadows enabled for %d meshes" % mesh_nodes.size())
+	var all_cast_on := true
+	for node in mesh_nodes:
+		if node and node.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON:
+			all_cast_on = false
+			break
+	print("[Player] Shadow casting set for %d meshes (all_on=%s)" % [mesh_nodes.size(), all_cast_on])

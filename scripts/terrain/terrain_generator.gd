@@ -265,6 +265,7 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	material.emission = Color(0.9, 0.9, 0.95)  # Subtle cool emission for snow glow
 	material.emission_energy_multiplier = 0.15  # Very gentle emission
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	print("[Terrain] Terrain material shadow receive disabled? %s" % [material.disable_receive_shadows])
 	array_mesh.surface_set_material(0, material)
 
 	# Create MeshInstance3D
@@ -273,6 +274,7 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	mesh_instance.gi_mode = GeometryInstance3D.GI_MODE_STATIC  # Enable shadow reception from player/obstacles
 	mesh_instance.name = "TerrainMesh"
+	print("[Terrain] Shadow settings: cast=%s, gi_mode=STATIC, receive_disabled=%s" % [mesh_instance.cast_shadow, material.disable_receive_shadows])
 
 	# Create StaticBody3D with collision
 	var static_body = StaticBody3D.new()

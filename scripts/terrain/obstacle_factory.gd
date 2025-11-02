@@ -158,6 +158,7 @@ func _create_multimesh_instances() -> void:
 	trees_multimesh.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	trees_multimesh.multimesh.mesh = tree_mesh
 	trees_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	print("[ObstacleFactory] Trees cast shadow on? %s" % [trees_multimesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON])
 	add_child(trees_multimesh)
 
 	# Grass
@@ -167,6 +168,7 @@ func _create_multimesh_instances() -> void:
 	grass_multimesh.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	grass_multimesh.multimesh.mesh = grass_mesh
 	grass_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	print("[ObstacleFactory] Grass cast shadow on? %s" % [grass_multimesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON])
 	add_child(grass_multimesh)
 
 	# Rocks (mixed sizes)
@@ -176,6 +178,7 @@ func _create_multimesh_instances() -> void:
 	rocks_multimesh.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	rocks_multimesh.multimesh.mesh = rock_mesh_medium
 	rocks_multimesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	print("[ObstacleFactory] Rocks cast shadow on? %s" % [rocks_multimesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON])
 	add_child(rocks_multimesh)
 
 

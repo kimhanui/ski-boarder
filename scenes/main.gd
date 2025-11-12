@@ -8,6 +8,8 @@ extends Node3D
 @onready var difficulty_selector: Control = $UI/DifficultySelector
 @onready var minimap: Control = $UI/Minimap
 @onready var density_controls: VBoxContainer = $UI/DensityControls
+@onready var trick_score_display: Control = $UI/TrickScoreDisplay
+@onready var trick_mode_button: Button = $UI/TrickModeButton
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 
 
@@ -34,6 +36,17 @@ func _ready() -> void:
 	# Connect DensityControls to ObstacleFactory
 	if density_controls and obstacle_factory:
 		density_controls.obstacle_factory = obstacle_factory
+
+	# Connect TrickScoreDisplay to Player
+	if trick_score_display and player:
+		trick_score_display.connect_to_player(player)
+		print("[Main] Trick score display connected to player")
+
+	# Connect TrickModeButton to Player
+	if trick_mode_button and player:
+		trick_mode_button.toggled.connect(_on_trick_mode_toggled)
+		_update_trick_mode_button_text()
+		print("[Main] Trick mode button connected to player")
 
 	print("Main scene initialized")
 	print("Press F1 to cycle camera modes")
@@ -70,3 +83,19 @@ func _on_regenerate_requested() -> void:
 	procedural_slope.regenerate_terrain(current_difficulty)
 
 	print("[Main] Terrain regeneration complete!")
+
+
+## Handle trick mode button toggle
+func _on_trick_mode_toggled(button_pressed: bool) -> void:
+	if player and player.has_method("set_trick_mode"):
+		player.set_trick_mode(button_pressed)
+		_update_trick_mode_button_text()
+		print("[Main] Trick mode toggled: %s" % ("ON" if button_pressed else "OFF"))
+
+
+## Update trick mode button text
+func _update_trick_mode_button_text() -> void:
+	if trick_mode_button and player:
+		var mode_text = "ON" if player.trick_mode_enabled else "OFF"
+		trick_mode_button.text = "트릭 모드: " + mode_text
+		trick_mode_button.button_pressed = player.trick_mode_enabled

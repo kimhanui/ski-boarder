@@ -139,6 +139,34 @@ static func _generate_heightmap(terrain_data: Dictionary, path_data: Dictionary,
 			else:
 				base_height += sin((slope_progress - 0.70) * PI * 3.0) * 8.0  # Gentle bumps
 
+			# JUMP RAMP GENERATION: Add periodic jump ramps at regular intervals
+			var ramp_interval = config.get("jump_ramp_interval", 200.0)
+			var ramp_height = config.get("ramp_height", 15.0)
+			var ramp_length = config.get("ramp_length", 35.0)
+			var ramp_transition = config.get("ramp_transition_ratio", 0.4)
+
+			# Calculate actual distance traveled down the slope
+			var distance_traveled = z * cell_size
+
+			# Find position within current ramp interval (0 to ramp_interval)
+			var local_pos = fmod(distance_traveled, ramp_interval)
+
+			# Check if we're inside a ramp zone
+			if local_pos < ramp_length:
+				# Inside ramp: calculate ramp profile
+				var ramp_progress = local_pos / ramp_length  # 0.0 to 1.0
+
+				if ramp_progress < ramp_transition:
+					# Uphill section (smooth rise)
+					var up_progress = ramp_progress / ramp_transition
+					var ramp_add = sin(up_progress * PI * 0.5) * ramp_height
+					base_height += ramp_add
+				else:
+					# Downhill section (steep drop for takeoff)
+					var down_progress = (ramp_progress - ramp_transition) / (1.0 - ramp_transition)
+					var ramp_add = cos(down_progress * PI * 0.5) * ramp_height
+					base_height += ramp_add
+
 			# Add smooth natural terrain variation using multi-octave noise
 			var noise_val = 0.0
 
@@ -261,9 +289,7 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	material.albedo_color = Color(0.95, 0.95, 0.98)  # Bright snow with slight blue tint
 	material.roughness = 0.4  # Smooth surface for reflective sparkle
 	material.metallic = 0.0
-	material.emission_enabled = true
-	material.emission = Color(0.9, 0.9, 0.95)  # Subtle cool emission for snow glow
-	material.emission_energy_multiplier = 0.15  # Very gentle emission
+	material.emission_enabled = false  # Disable emission to improve shadow contrast
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	array_mesh.surface_set_material(0, material)
 

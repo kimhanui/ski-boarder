@@ -18,7 +18,12 @@ static func get_config(difficulty: String) -> Dictionary:
 				"obstacle_min_distance": 15.0,
 				"obstacle_max_distance": 35.0,
 				"obstacle_scale_range": [0.8, 1.5],
-				"checkpoint_interval": 300.0
+				"checkpoint_interval": 300.0,
+				# Jump ramp settings
+				"jump_ramp_interval": 250.0,  # Distance between ramps (m)
+				"ramp_height": 10.0,  # Ramp peak height above terrain (m)
+				"ramp_length": 40.0,  # Total ramp length (m)
+				"ramp_transition_ratio": 0.4  # 0.4 = 40% uphill, 60% downhill
 			}
 		"hard":
 			return {
@@ -33,7 +38,12 @@ static func get_config(difficulty: String) -> Dictionary:
 				"obstacle_min_distance": 3.0,
 				"obstacle_max_distance": 15.0,
 				"obstacle_scale_range": [1.2, 2.5],
-				"checkpoint_interval": 400.0
+				"checkpoint_interval": 400.0,
+				# Jump ramp settings
+				"jump_ramp_interval": 180.0,  # Shorter interval for more ramps
+				"ramp_height": 20.0,  # Taller ramps
+				"ramp_length": 30.0,  # Shorter ramps = steeper
+				"ramp_transition_ratio": 0.35  # Steeper downhill
 			}
 		_:  # "medium" (default)
 			return {
@@ -48,7 +58,12 @@ static func get_config(difficulty: String) -> Dictionary:
 				"obstacle_min_distance": 8.0,
 				"obstacle_max_distance": 20.0,
 				"obstacle_scale_range": [1.0, 2.0],
-				"checkpoint_interval": 300.0
+				"checkpoint_interval": 300.0,
+				# Jump ramp settings
+				"jump_ramp_interval": 200.0,  # Distance between ramps (m)
+				"ramp_height": 15.0,  # Ramp peak height above terrain (m)
+				"ramp_length": 35.0,  # Total ramp length (m)
+				"ramp_transition_ratio": 0.4  # 0.4 = 40% uphill, 60% downhill
 			}
 
 

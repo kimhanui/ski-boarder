@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://bqyxsn7hxvf7h"]
+[gd_scene load_steps=12 format=3 uid="uid://bqyxsn7hxvf7h"]
 
 [ext_resource type="Script" uid="uid://cn342iexxqcl4" path="res://scenes/main.gd" id="1_main_script"]
 [ext_resource type="PackedScene" uid="uid://b7j8lam3n4p5q" path="res://scenes/environment/procedural_slope.tscn" id="1_procedural_slope"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="4_free_camera"]
 [ext_resource type="Script" uid="uid://bb5gwfvikxmqg" path="res://scripts/ui/minimap.gd" id="5_minimap"]
 [ext_resource type="Script" uid="uid://by0ffl8q2xtoe" path="res://scripts/ui/density_controls.gd" id="6_density_controls"]
+[ext_resource type="Script" uid="uid://brih7bde2cbp6" path="res://scripts/ui/trick_score_display.gd" id="7_trick_score"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -55,3 +56,65 @@ script = ExtResource("5_minimap")
 
 [node name="DensityControls" type="VBoxContainer" parent="UI"]
 script = ExtResource("6_density_controls")
+
+[node name="TrickScoreDisplay" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 1920.0
+offset_bottom = 1080.0
+script = ExtResource("7_trick_score")
+
+[node name="TrickNameLabel" type="Label" parent="UI/TrickScoreDisplay"]
+layout_mode = 0
+offset_left = 860.0
+offset_top = 150.0
+offset_right = 1060.0
+offset_bottom = 200.0
+theme_override_font_sizes/font_size = 32
+text = "Backflip"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RotationLabel" type="Label" parent="UI/TrickScoreDisplay"]
+layout_mode = 0
+offset_left = 860.0
+offset_top = 200.0
+offset_right = 1060.0
+offset_bottom = 260.0
+theme_override_font_sizes/font_size = 48
+text = "360°"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScorePopupLabel" type="Label" parent="UI/TrickScoreDisplay"]
+layout_mode = 0
+offset_left = 760.0
+offset_top = 400.0
+offset_right = 1160.0
+offset_bottom = 500.0
+theme_override_font_sizes/font_size = 42
+text = "Backflip
++100 pts!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TotalScoreLabel" type="Label" parent="UI/TrickScoreDisplay"]
+layout_mode = 0
+offset_left = 1700.0
+offset_top = 30.0
+offset_right = 1880.0
+offset_bottom = 80.0
+theme_override_font_sizes/font_size = 28
+text = "Score: 0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="TrickModeButton" type="Button" parent="UI"]
+offset_left = 10.0
+offset_top = 170.0
+offset_right = 180.0
+offset_bottom = 210.0
+mouse_default_cursor_shape = 2
+theme_override_font_sizes/font_size = 20
+toggle_mode = true
+text = "트릭 모드: OFF"

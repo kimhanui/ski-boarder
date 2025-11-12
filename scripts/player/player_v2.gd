@@ -12,7 +12,9 @@ const SLOPE_ACCELERATION_FACTOR = 0.5
 const BRAKE_DECELERATION = 10.0
 const FRICTION = 2.0
 const SKATING_SPEED_THRESHOLD = 4.0
-const JUMP_VELOCITY = 6.0
+const JUMP_VELOCITY = 12.0  # Increased from 6.0 for 2-3 sec airtime
+const JUMP_SPEED_BOOST_MAX = 3.0  # Max additional boost from speed
+const JUMP_RAMP_BOOST = 1.3  # 30% boost when on jump ramp
 const GRAVITY = 9.8
 
 # V2 Animation constants (based on PLAYER_MOVEMENT.md)
@@ -76,7 +78,6 @@ const STEER_YAW_DAMPING = 0.92  # Damping factor when no input (0.92 = 8% decay 
 @onready var speed_label = $UI/SpeedLabel
 @onready var trick_guide_label = $UI/TrickGuideLabel
 @onready var trick_display_label = $UI/TrickDisplayLabel
-@onready var trick_mode_button = $UI/TrickModeButton
 
 # Systems
 @onready var ski_tracks = $SkiTracks
@@ -133,12 +134,14 @@ var air_input_detected: Dictionary = {
 	"grab": false
 }
 
-# Air trick physics (ADD.md spec)
-var air_yaw: float = 0.0  # Accumulated yaw rotation (Y-axis spin)
-var air_roll: float = 0.0  # Body roll (Z-axis tilt)
-var air_pitch: float = 0.0  # Body pitch (X-axis front/back)
-var grab_frames: int = 0  # Frames grab is held
-var can_land_safely: bool = true  # Landing safety flag
+# Backflip/Frontflip trick system (Simplified)
+var air_pitch: float = 0.0  # Body pitch (X-axis front/back) - Flip rotation
+var trick_rotation_x_total: float = 0.0  # Total accumulated pitch rotation (degrees, can exceed 360)
+var trick_flip_speed: float = 0.0  # Current flip rotation speed (deg/s)
+const FLIP_ROTATION_SPEED = 360.0  # deg/s - one full rotation per second
+var trick_in_progress: bool = false  # Whether a flip trick is being performed
+var trick_score: int = 0  # Current trick score
+var total_score: int = 0  # Total accumulated score
 
 # Carving/steering state (new physics-based turning)
 var steer_yaw: float = 0.0  # Current ski yaw angle in degrees (-SKI_YAW_MAX to +SKI_YAW_MAX)
@@ -163,25 +166,6 @@ func _ready() -> void:
 
 	# Initialize trick UI
 	_initialize_trick_ui()
-
-	# Connect trick mode button with forced initialization
-	if trick_mode_button:
-		# Force button properties (prevent scene file issues)
-		trick_mode_button.disabled = false
-		trick_mode_button.mouse_filter = Control.MOUSE_FILTER_STOP
-		trick_mode_button.button_pressed = trick_mode_enabled
-
-		# Connect signal
-		trick_mode_button.toggled.connect(_on_trick_mode_toggled)
-
-		# Update UI to match initial state
-		_update_trick_mode_ui()
-
-		print("[BUTTON INIT] Trick mode button initialized:")
-		print("  - Disabled: ", trick_mode_button.disabled)
-		print("  - Mouse Filter: ", trick_mode_button.mouse_filter)
-		print("  - Button Pressed: ", trick_mode_button.button_pressed)
-		print("  - Trick Mode Enabled: ", trick_mode_enabled)
 
 	# Ensure mouse is visible for UI interaction
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -208,8 +192,8 @@ func _physics_process(delta: float) -> void:
 			jump_state = JumpState.CROUCHING
 			jump_timer = 0.0
 		else:
-			# Trick mode OFF: simple jump (direct to airborne)
-			velocity.y = JUMP_VELOCITY
+			# Trick mode OFF: simple jump with boost
+			velocity.y = _calculate_jump_boost()
 			jump_state = JumpState.AIRBORNE
 			was_in_air = true
 
@@ -220,22 +204,12 @@ func _physics_process(delta: float) -> void:
 		# Reset air inputs when grounded or trick mode disabled
 		_reset_air_inputs()
 
-	# Force reset body rotations when trick mode is OFF (only in air, only Z rotation)
+	# Force reset body rotations when trick mode is OFF (Simplified)
 	if not trick_mode_enabled and jump_state == JumpState.AIRBORNE:
 		if body:
-			# Keep Y rotation for turning, only reset Z (roll from tricks)
+			# Keep Y rotation for turning, reset Z (roll) and X (pitch)
 			body.rotation_degrees.z = 0.0
-		# Reset all body part rotations
-		if torso:
-			torso.rotation_degrees.x = 0.0
-		if left_arm and right_arm:
-			left_arm.rotation_degrees.x = 0.0
-			right_arm.rotation_degrees.x = 0.0
-			left_arm.position.x = -0.35
-			right_arm.position.x = 0.35
-		if left_leg and right_leg:
-			left_leg.rotation_degrees.x = 0.0
-			right_leg.rotation_degrees.x = 0.0
+			body.rotation_degrees.x = 0.0
 
 	# Update trick display timer
 	_update_trick_display(delta)
@@ -310,7 +284,9 @@ func _physics_process(delta: float) -> void:
 
 	# Apply body rotation
 	body.rotation_degrees.z = current_tilt
-	body.rotation_degrees.x = current_lean
+	# ✅ FIX: Don't apply current_lean during airborne tricks (air_pitch controls it)
+	if not (jump_state == JumpState.AIRBORNE and trick_mode_enabled):
+		body.rotation_degrees.x = current_lean
 
 	# Apply upper body lean
 	torso.rotation_degrees.x = current_upper_lean
@@ -415,7 +391,7 @@ func _update_jump_state(delta: float) -> void:
 			if jump_timer >= JUMP_CROUCH_DURATION:
 				jump_state = JumpState.LAUNCHING
 				jump_timer = 0.0
-				velocity.y = JUMP_VELOCITY  # Actually jump
+				velocity.y = _calculate_jump_boost()  # Jump with boost
 
 		JumpState.LAUNCHING:
 			jump_timer += delta
@@ -433,9 +409,12 @@ func _update_jump_state(delta: float) -> void:
 
 			# Check landing conditions (ADD.md spec)
 			if _can_land_safely():
+				# Calculate trick score before landing
+				_calculate_trick_score()
+
 				jump_state = JumpState.LANDING
 				jump_timer = 0.0
-				print("[LANDING] Safe landing! Roll: %.1f°, Pitch: %.1f°" % [air_roll, air_pitch])
+				print("[LANDING] Safe landing! Pitch: %.1f°" % air_pitch)
 
 		JumpState.LANDING:
 			jump_timer += delta
@@ -443,7 +422,14 @@ func _update_jump_state(delta: float) -> void:
 			var landing_progress = min(jump_timer / JUMP_CROUCH_DURATION, 1.0)
 			jump_launch_progress = 1.0 - landing_progress
 
+			# ✅ 부드럽게 기본 자세로 복귀 (0.3초 동안)
+			# air_pitch를 0으로 리셋하는 대신 current_lean으로 블렌딩
+			if body and trick_mode_enabled:
+				body.rotation_degrees.x = lerp(air_pitch, current_lean, landing_progress)
+
 			if jump_timer >= JUMP_CROUCH_DURATION:
+				# ✅ 착지 완료 시 트릭 변수만 리셋 (body rotation은 유지)
+				_reset_air_inputs()
 				jump_state = JumpState.GROUNDED
 				was_in_air = false
 
@@ -785,7 +771,7 @@ func respawn() -> void:
 	print("Player (V2) respawned at: ", spawn_position)
 
 
-## Detect trick inputs during airborne state (ADD.md spec)
+## Detect trick inputs during airborne state - Simplified (Flip only)
 func _detect_trick_inputs() -> void:
 	# Early exit if trick mode disabled
 	if not trick_mode_enabled:
@@ -793,135 +779,50 @@ func _detect_trick_inputs() -> void:
 
 	var delta = get_physics_process_delta_time()
 
-	# A/D → Yaw (spin) + Roll (bank)
-	if Input.is_action_pressed("move_left"):
-		air_yaw += AIR_YAW_SPEED_MAX * delta  # Spin left (positive Y rotation)
-		air_roll = clamp(air_roll + AIR_ROLL_RATE * 0.25 * delta, -AIR_ROLL_MAX, AIR_ROLL_MAX)
-	if Input.is_action_pressed("move_right"):
-		air_yaw -= AIR_YAW_SPEED_MAX * delta  # Spin right (negative Y rotation)
-		air_roll = clamp(air_roll - AIR_ROLL_RATE * 0.25 * delta, -AIR_ROLL_MAX, AIR_ROLL_MAX)
-
-	# W/S → Pitch (forward/back flip)
-	if Input.is_action_pressed("move_forward"):
-		air_pitch = lerp(air_pitch, AIR_PITCH_TARGET, 0.1)  # Pitch forward
-	elif Input.is_action_pressed("move_back"):
-		air_pitch = lerp(air_pitch, -AIR_PITCH_TARGET, 0.1)  # Pitch back
+	# ✅ W/S → Flip tricks ONLY (Frontflip/Backflip)
+	if Input.is_action_pressed("move_back"):
+		# Down key = Backflip (pitch backward, negative rotation)
+		trick_flip_speed = -FLIP_ROTATION_SPEED
+		if not trick_in_progress:
+			trick_in_progress = true
+			current_trick = "Backflip"
+			print("[Trick] Starting Backflip!")
+	elif Input.is_action_pressed("move_forward"):
+		# Up key = Frontflip (pitch forward, positive rotation)
+		trick_flip_speed = FLIP_ROTATION_SPEED
+		if not trick_in_progress:
+			trick_in_progress = true
+			current_trick = "Frontflip"
+			print("[Trick] Starting Frontflip!")
 	else:
-		air_pitch = lerp(air_pitch, 0.0, 0.12)  # Return to neutral
+		# No flip input: gradually slow down rotation
+		trick_flip_speed = lerp(trick_flip_speed, 0.0, 0.15)
 
-	# Space → Grab
-	if Input.is_action_pressed("jump"):
-		grab_frames += 1
-	else:
-		grab_frames = max(grab_frames - 2, 0)
+	# Apply flip rotation
+	if abs(trick_flip_speed) > 1.0:  # Only rotate if speed is significant
+		var flip_delta = trick_flip_speed * delta
+		trick_rotation_x_total += flip_delta
+		air_pitch += flip_delta
 
 	# Apply physical rotations to body
 	_apply_air_trick_rotations()
 
-	# Determine current trick name for UI
-	var trick_name = _determine_trick_from_physics()
-	if trick_name != "" and trick_name != current_trick:
-		_trigger_trick(trick_name)
 
-
-## Apply air trick rotations to body (ADD.md spec)
+## Apply air trick rotations to body - Simplified (Flip only)
 func _apply_air_trick_rotations() -> void:
-	# Apply additive rotations to Body node
-	# Note: Body.rotation is LOCAL to Player node
+	# ✅ Pitch (X-axis flip) ONLY - Backflip/Frontflip
+	body.rotation_degrees.x = air_pitch
 
-	# Yaw (Y-axis spin) - rotate entire body
-	body.rotation.y = deg_to_rad(air_yaw)
+	# ✅ Yaw/Roll always 0 (no spinning or banking)
+	body.rotation.y = 0.0
+	body.rotation_degrees.z = 0.0
 
-	# Roll (Z-axis bank) - body tilt left/right
-	body.rotation_degrees.z = air_roll
-
-	# Pitch (X-axis flip) - forward/back rotation
-	# ADD.md: Apply to Torso, Arms, Legs (not Head!)
-	torso.rotation_degrees.x = air_pitch
-
-	# Grab animation (ADD.md spec) - arms reach toward skis
-	var grab_weight = clamp(grab_frames / float(GRAB_MIN_FRAMES), 0.0, 1.0)
-	if grab_weight > 0.0:
-		# Arms reach down toward skis (additive to pitch)
-		var grab_arm_angle = 60.0 * grab_weight  # Reach down 60°
-		left_arm.rotation_degrees.x = air_pitch + grab_arm_angle
-		right_arm.rotation_degrees.x = air_pitch + grab_arm_angle
-
-		# Arms move slightly inward (toward skis)
-		var grab_arm_inward = 0.1 * grab_weight
-		left_arm.position.x = -0.35 + grab_arm_inward  # Original: -0.35
-		right_arm.position.x = 0.35 - grab_arm_inward  # Original: 0.35
-	else:
-		# Normal arm rotation (no grab)
-		left_arm.rotation_degrees.x = air_pitch
-		right_arm.rotation_degrees.x = air_pitch
-		# Reset arm positions
-		left_arm.position.x = -0.35
-		right_arm.position.x = 0.35
-
-	# Legs pitch slightly less for natural look
-	left_leg.rotation_degrees.x = air_pitch * 0.5
-	right_leg.rotation_degrees.x = air_pitch * 0.5
-
-	# Head NEVER rotates - only small translation (ADD.md constraint)
+	# Head NEVER rotates - only small translation
 	head.rotation = Vector3.ZERO
-	# Small forward translation based on pitch
-	var head_forward_offset = -air_pitch * 0.01  # Subtle forward lean
+	var head_forward_offset = -air_pitch * 0.01
 	head.position.z = head_forward_offset
 
 
-## Determine trick name from physics state (ADD.md spec)
-func _determine_trick_from_physics() -> String:
-	var is_spinning = abs(air_yaw) > 45.0  # Spinning if > 45° total
-	var is_rolling = abs(air_roll) > 10.0  # Rolling if > 10°
-	var is_pitching_fwd = air_pitch > 10.0
-	var is_pitching_back = air_pitch < -10.0
-	var is_grabbing = grab_frames >= GRAB_MIN_FRAMES
-
-	# Combination tricks
-	if is_grabbing and is_pitching_fwd:
-		return "NOSE GRAB"
-	if is_grabbing and is_pitching_back:
-		return "TAIL GRAB"
-	if is_grabbing and (is_spinning or is_rolling):
-		return "GRAB + TWIST"
-
-	if is_pitching_fwd and is_spinning and air_yaw > 0:
-		return "CORKSCREW LEFT"
-	if is_pitching_fwd and is_spinning and air_yaw < 0:
-		return "CORKSCREW RIGHT"
-	if is_pitching_back and is_spinning and air_yaw > 0:
-		return "BACKROLL LEFT"
-	if is_pitching_back and is_spinning and air_yaw < 0:
-		return "BACKROLL RIGHT"
-
-	# Single tricks
-	if is_spinning and air_yaw > 0:
-		var spins = int(abs(air_yaw) / 180.0)
-		return "SPIN LEFT " + str(spins * 180) + "°"
-	if is_spinning and air_yaw < 0:
-		var spins = int(abs(air_yaw) / 180.0)
-		return "SPIN RIGHT " + str(spins * 180) + "°"
-	if is_pitching_fwd:
-		return "PITCH FORWARD"
-	if is_pitching_back:
-		return "PITCH BACK"
-	if is_grabbing:
-		return "GRAB"
-
-	return ""
-
-
-## Trigger a trick (display and emit signal)
-func _trigger_trick(trick_name: String) -> void:
-	current_trick = trick_name
-	trick_display_timer = TRICK_DISPLAY_DURATION
-	trick_performed.emit(trick_name)
-
-	# Update display immediately
-	if trick_display_label:
-		trick_display_label.text = trick_name
-		trick_display_label.visible = true
 
 
 ## Update trick display timer and fade out
@@ -938,27 +839,17 @@ func _update_trick_display(delta: float) -> void:
 
 ## Reset air input tracking and physics
 func _reset_air_inputs() -> void:
-	air_input_detected["forward"] = false
-	air_input_detected["back"] = false
-	air_input_detected["left"] = false
-	air_input_detected["right"] = false
-	air_input_detected["grab"] = false
-
-	# Reset air physics
-	air_yaw = 0.0
-	air_roll = 0.0
+	# Reset flip trick variables only
+	trick_rotation_x_total = 0.0
+	trick_flip_speed = 0.0
+	trick_in_progress = false
 	air_pitch = 0.0
-	grab_frames = 0
 
-	# Reset body rotations (when trick mode disabled or landed)
+	# Reset body rotations (Y, Z만 리셋, X는 current_lean이 자연스럽게 처리)
 	if body:
 		body.rotation.y = 0.0
 		body.rotation_degrees.z = 0.0
-
-	# Reset arm positions from grab
-	if left_arm and right_arm:
-		left_arm.position.x = -0.35
-		right_arm.position.x = 0.35
+		# body.rotation_degrees.x는 리셋하지 않음 - 착지 자세 유지
 
 
 ## Check if safe landing is possible (ADD.md spec for trick mode, instant for original)
@@ -979,28 +870,23 @@ func _can_land_safely() -> bool:
 	if not (left_grounded or right_grounded):
 		return false
 
-	# Check angle limits (ADD.md spec)
-	var roll_ok = abs(air_roll) <= LAND_ROLL_THRESHOLD  # ±12°
+	# Check angle limits - Pitch only (no roll check)
 	var pitch_ok = abs(air_pitch) <= LAND_PITCH_THRESHOLD  # ±18°
 
-	can_land_safely = roll_ok and pitch_ok
-
 	# Unsafe landing warning
-	if not can_land_safely:
-		print("[WARNING] Unsafe landing! Roll: %.1f° (max %.1f°), Pitch: %.1f° (max %.1f°)" % [
-			air_roll, LAND_ROLL_THRESHOLD,
+	if not pitch_ok:
+		print("[WARNING] Unsafe landing! Pitch: %.1f° (max %.1f°)" % [
 			air_pitch, LAND_PITCH_THRESHOLD
 		])
 
-	return (left_grounded or right_grounded) and can_land_safely
+	return (left_grounded or right_grounded) and pitch_ok
 
 
 ## Initialize trick UI with guide text
 func _initialize_trick_ui() -> void:
 	# Set up trick guide (always visible)
 	if trick_guide_label:
-		var guide_text = "공중 트릭: W=전방기울임 | S=후방기울임 | A=좌회전 | D=우회전 | Space=그랩\n"
-		guide_text += "조합 트릭: W+A/D=코크스크류 | S+A/D=백롤 | Space+W=노즈그랩 | Space+S=테일그랩"
+		var guide_text = "공중 트릭: W=Frontflip | S=Backflip\n360° 배수로 착지하면 성공!"
 		trick_guide_label.text = guide_text
 		trick_guide_label.visible = trick_mode_enabled
 
@@ -1012,21 +898,19 @@ func _initialize_trick_ui() -> void:
 
 ## Update trick mode UI elements
 func _update_trick_mode_ui() -> void:
-	if trick_mode_button:
-		trick_mode_button.text = "트릭 모드: ON" if trick_mode_enabled else "트릭 모드: OFF"
 	if trick_guide_label:
 		trick_guide_label.visible = trick_mode_enabled
 
 
-## Handle trick mode toggle button
-func _on_trick_mode_toggled(button_pressed: bool) -> void:
+## Set trick mode (called from external UI)
+func set_trick_mode(enabled: bool) -> void:
 	print("========================================")
-	print("[TRICK MODE TOGGLE] Button clicked!")
+	print("[TRICK MODE] External set called")
 	print("  Previous state: ", "ON" if trick_mode_enabled else "OFF")
-	print("  New state: ", "ON" if button_pressed else "OFF")
+	print("  New state: ", "ON" if enabled else "OFF")
 	print("========================================")
 
-	trick_mode_enabled = button_pressed
+	trick_mode_enabled = enabled
 
 	# Synchronize velocity_heading when switching modes
 	if trick_mode_enabled:
@@ -1047,7 +931,6 @@ func _on_trick_mode_toggled(button_pressed: bool) -> void:
 
 	# Update UI elements
 	_update_trick_mode_ui()
-	print("  - Button text updated: ", trick_mode_button.text if trick_mode_button else "N/A")
 	print("  - Trick guide visible: ", trick_guide_label.visible if trick_guide_label else false)
 
 	# Hide trick display when disabled
@@ -1173,3 +1056,117 @@ func _enable_player_shadows() -> void:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 	print("[Player] Shadows enabled for %d meshes" % mesh_nodes.size())
+
+
+## Calculate jump velocity with speed and ramp boosts
+func _calculate_jump_boost() -> float:
+	var jump_vel = JUMP_VELOCITY
+
+	# Speed boost: faster = higher jump (up to +3 m/s)
+	var speed_ratio = current_speed / MAX_SPEED
+	jump_vel += speed_ratio * JUMP_SPEED_BOOST_MAX
+
+	# Ramp boost: detect if on downward slope (ramp peak)
+	var on_ramp = _detect_ramp_peak()
+	if on_ramp:
+		jump_vel *= JUMP_RAMP_BOOST
+		print("[Player] Jump ramp boost! velocity: %.1f m/s" % jump_vel)
+
+	return jump_vel
+
+
+## Detect if player is on a jump ramp peak (downward slope ahead)
+func _detect_ramp_peak() -> bool:
+	# Raycast downward from player position
+	var space_state = get_world_3d().direct_space_state
+	var from = global_position
+	var to = global_position + Vector3.DOWN * 2.0  # 2m down
+
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 2  # Environment layer only
+	var result = space_state.intersect_ray(query)
+
+	if result.is_empty():
+		return false
+
+	# Check ground normal: steep downward = ramp peak
+	var ground_normal = result.get("normal", Vector3.UP)
+	var forward_dir = -transform.basis.z  # Player forward direction
+
+	# Dot product with forward: negative = downhill slope
+	var slope_dot = ground_normal.dot(forward_dir)
+
+	# If slope is steep downward ahead (< -0.3), we're on ramp peak
+	if slope_dot < -0.3:
+		return true
+
+	return false
+
+
+## Calculate trick score based on rotation accuracy
+func _calculate_trick_score() -> void:
+	# Only calculate if a flip trick was performed
+	if not trick_in_progress:
+		return
+
+	# Calculate number of full rotations
+	var total_rotation_abs = abs(trick_rotation_x_total)
+	var num_rotations = floor(total_rotation_abs / 360.0)
+
+	if num_rotations == 0:
+		# No complete rotation, no score
+		print("[Trick] Incomplete rotation (%.1f°), no score" % total_rotation_abs)
+		return
+
+	# Check landing accuracy: how close to a clean 360° multiple?
+	var rotation_remainder = fmod(total_rotation_abs, 360.0)
+	var landing_error = min(rotation_remainder, 360.0 - rotation_remainder)
+
+	# Landing tolerance: ±30° for success
+	const LANDING_TOLERANCE = 30.0
+	const PERFECT_LANDING_TOLERANCE = 10.0
+
+	if landing_error > LANDING_TOLERANCE:
+		# Failed landing: rotation not clean
+		print("[Trick] FAILED! Rotation error: %.1f° (need ±%.0f°)" % [landing_error, LANDING_TOLERANCE])
+		print("  → Over/under-rotated, rough landing!")
+		return
+
+	# Success! Calculate score
+	var base_score = 0
+	match num_rotations:
+		1:
+			base_score = 100  # Single flip (360°)
+		2:
+			base_score = 250  # Double flip (720°)
+		3:
+			base_score = 450  # Triple flip (1080°)
+		_:
+			base_score = 450 + (num_rotations - 3) * 250  # Quad+ flips
+
+	# Perfect landing bonus
+	var bonus = 0
+	if landing_error <= PERFECT_LANDING_TOLERANCE:
+		bonus = 50
+		print("[Trick] ✨ PERFECT LANDING! ✨")
+
+	trick_score = base_score + bonus
+	total_score += trick_score
+
+	# Determine trick name with rotation count
+	var trick_full_name = ""
+	if num_rotations == 1:
+		trick_full_name = current_trick  # "Backflip" or "Frontflip"
+	elif num_rotations == 2:
+		trick_full_name = "Double " + current_trick
+	elif num_rotations == 3:
+		trick_full_name = "Triple " + current_trick
+	else:
+		trick_full_name = str(num_rotations) + "x " + current_trick
+
+	print("[Trick] SUCCESS! %s (%.1f°)" % [trick_full_name, total_rotation_abs])
+	print("  → Score: +%d pts (base: %d, bonus: %d)" % [trick_score, base_score, bonus])
+	print("  → Total Score: %d pts" % total_score)
+
+	# Emit signal for UI update
+	trick_performed.emit(trick_full_name)

@@ -39,6 +39,7 @@ const AIR_PITCH_TARGET = 30.0  # deg - pitch forward/back target
 const GRAB_MIN_FRAMES = 6  # Minimum frames to hold grab
 const LAND_ROLL_THRESHOLD = 12.0  # deg - max roll for safe landing
 const LAND_PITCH_THRESHOLD = 18.0  # deg - max pitch for safe landing
+const MIN_TRICK_HEIGHT = 1.5  # meters - minimum height above ground to perform tricks
 
 # Carving/steering constants (new physics-based turning)
 const STEER_YAW_RATE = 90.0  # deg/s - how fast ski yaw changes with A/D input
@@ -197,12 +198,14 @@ func _physics_process(delta: float) -> void:
 			jump_state = JumpState.AIRBORNE
 			was_in_air = true
 
-	# Detect trick inputs in the air (only if trick mode enabled)
+	# Detect trick inputs in the air (only if trick mode enabled and AIRBORNE)
 	if jump_state == JumpState.AIRBORNE and trick_mode_enabled:
 		_detect_trick_inputs()
-	else:
-		# Reset air inputs when grounded or trick mode disabled
-		_reset_air_inputs()
+	elif jump_state != JumpState.AIRBORNE:
+		# Force reset air inputs when not airborne (GROUNDED, LANDING, etc.)
+		if trick_in_progress or abs(air_pitch) > 0.1 or abs(trick_flip_speed) > 0.1:
+			_reset_air_inputs()
+			print("[Trick] Reset - Not airborne (state: %d)" % jump_state)
 
 	# Force reset body rotations when trick mode is OFF (Simplified)
 	if not trick_mode_enabled and jump_state == JumpState.AIRBORNE:
@@ -411,6 +414,9 @@ func _update_jump_state(delta: float) -> void:
 			if _can_land_safely():
 				# Calculate trick score before landing
 				_calculate_trick_score()
+
+				# Stop trick rotation immediately on landing
+				trick_flip_speed = 0.0
 
 				jump_state = JumpState.LANDING
 				jump_timer = 0.0
@@ -777,6 +783,13 @@ func _detect_trick_inputs() -> void:
 	if not trick_mode_enabled:
 		return
 
+	# ✅ Check minimum height above ground for tricks
+	var height_above_ground = _get_height_above_ground()
+	if height_above_ground < MIN_TRICK_HEIGHT:
+		# Too low to perform tricks - reset trick speed gradually
+		trick_flip_speed = lerp(trick_flip_speed, 0.0, 0.2)
+		return
+
 	var delta = get_physics_process_delta_time()
 
 	# ✅ W/S → Flip tricks ONLY (Frontflip/Backflip)
@@ -1101,6 +1114,28 @@ func _detect_ramp_peak() -> bool:
 		return true
 
 	return false
+
+
+## Get height above ground using raycast
+func _get_height_above_ground() -> float:
+	# Raycast downward from player position to find ground
+	var space_state = get_world_3d().direct_space_state
+	var from = global_position
+	var to = global_position + Vector3.DOWN * 50.0  # Check up to 50m down
+
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 2  # Environment layer only
+	var result = space_state.intersect_ray(query)
+
+	if result.is_empty():
+		# No ground found - assume very high
+		return 999.0
+
+	# Calculate distance to ground
+	var ground_point = result.get("position", global_position)
+	var height = global_position.y - ground_point.y
+
+	return height
 
 
 ## Calculate trick score based on rotation accuracy

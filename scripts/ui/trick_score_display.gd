@@ -55,7 +55,8 @@ func _update_trick_rotation_display() -> void:
 		return
 
 	# Check if player is in air and performing a flip trick
-	var is_airborne = player.jump_state == 3  # JumpState.AIRBORNE = 3
+	# V3: Use PlayerState enum (FLIP = 3)
+	var is_airborne = player.state == 3  # PlayerState.FLIP = 3
 	var is_tricking = player.trick_in_progress
 
 	if is_airborne and is_tricking:

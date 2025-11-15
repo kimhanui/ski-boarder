@@ -86,6 +86,9 @@ const STEER_YAW_DAMPING = 0.92  # Damping factor when no input (0.92 = 8% decay 
 # Camera mode
 var camera_mode = 0
 
+# 1인칭 시점에서 몸통 숨김 여부 (H 키로 토글)
+var hide_body_in_first_person: bool = false
+
 # Trick mode toggle
 var trick_mode_enabled: bool = false  # Default: OFF
 
@@ -429,12 +432,29 @@ func _update_jump_state(delta: float) -> void:
 			jump_launch_progress = 1.0 - landing_progress
 
 			# ✅ 부드럽게 기본 자세로 복귀 (0.3초 동안)
-			# air_pitch를 0으로 리셋하는 대신 current_lean으로 블렌딩
+			# 트릭 자세에서 정상 자세(0도)로 부드럽게 전환
 			if body and trick_mode_enabled:
-				body.rotation_degrees.x = lerp(air_pitch, current_lean, landing_progress)
+				body.rotation_degrees.x = lerp(air_pitch, 0.0, landing_progress)
 
 			if jump_timer >= JUMP_CROUCH_DURATION:
-				# ✅ 착지 완료 시 트릭 변수만 리셋 (body rotation은 유지)
+				# ✅ 착지 완료: 신체 부위 완전 리셋
+				# Body 회전 및 위치 리셋
+				if body:
+					body.rotation_degrees.x = 0.0
+					body.rotation.y = 0.0
+					body.rotation_degrees.z = 0.0
+					body.position.y = 0.0  # Crouch offset 제거
+
+				# Head 위치 및 회전 리셋
+				if head:
+					head.rotation = Vector3.ZERO
+					head.position.z = 0.0  # 트릭 forward offset 제거
+
+				# Legs 회전 리셋
+				if left_leg and right_leg:
+					left_leg.rotation_degrees.x = 0.0  # 착지 bend 제거
+					right_leg.rotation_degrees.x = 0.0
+
 				_reset_air_inputs()
 				jump_state = JumpState.GROUNDED
 				was_in_air = false
@@ -676,6 +696,12 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("respawn"):
 		respawn()
 
+	# H 키: 1인칭 시점에서 몸통 가시성 토글
+	if event.is_action_pressed("toggle_body_visibility"):
+		hide_body_in_first_person = !hide_body_in_first_person
+		_update_visibility()
+		print("[Camera] Body visibility in first-person: ", !hide_body_in_first_person)
+
 
 func _apply_camera_mode() -> void:
 	match camera_mode:
@@ -700,7 +726,7 @@ func _apply_camera_mode() -> void:
 			camera_first_person.current = false
 			camera_free.activate()
 
-	_update_eye_visibility()
+	_update_visibility()
 
 
 func _get_camera_mode_name() -> String:
@@ -717,11 +743,88 @@ func _get_camera_mode_name() -> String:
 			return "알 수 없음"
 
 
-func _update_eye_visibility() -> void:
+func _update_visibility() -> void:
+	# 1인칭에서는 눈과 머리 모두 숨김
+	var is_first_person = (camera_mode == 2)
+
 	if left_eye and right_eye:
-		var hide_eyes = (camera_mode == 2)
-		left_eye.visible = !hide_eyes
-		right_eye.visible = !hide_eyes
+		left_eye.visible = !is_first_person
+		right_eye.visible = !is_first_person
+
+	if head:
+		head.visible = !is_first_person
+
+	# 1인칭에서 몸통 가시성 토글 (H 키)
+	if is_first_person and hide_body_in_first_person:
+		# 몸통 전체 숨김 (스키는 제외)
+		if torso:
+			torso.visible = false
+
+		# 팔 숨김
+		var left_upper_arm = left_arm.get_node_or_null("UpperArm") if left_arm else null
+		var left_ski_pole = left_arm.get_node_or_null("SkiPole") if left_arm else null
+		var right_upper_arm = right_arm.get_node_or_null("UpperArm") if right_arm else null
+		var right_ski_pole = right_arm.get_node_or_null("SkiPole") if right_arm else null
+
+		if left_upper_arm:
+			left_upper_arm.visible = false
+		if left_ski_pole:
+			left_ski_pole.visible = false
+		if right_upper_arm:
+			right_upper_arm.visible = false
+		if right_ski_pole:
+			right_ski_pole.visible = false
+
+		# 다리 숨김
+		var left_upper_leg = left_leg.get_node_or_null("UpperLeg") if left_leg else null
+		var left_lower_leg = left_leg.get_node_or_null("LowerLeg") if left_leg else null
+		var right_upper_leg = right_leg.get_node_or_null("UpperLeg") if right_leg else null
+		var right_lower_leg = right_leg.get_node_or_null("LowerLeg") if right_leg else null
+
+		if left_upper_leg:
+			left_upper_leg.visible = false
+		if left_lower_leg:
+			left_lower_leg.visible = false
+		if right_upper_leg:
+			right_upper_leg.visible = false
+		if right_lower_leg:
+			right_lower_leg.visible = false
+
+		# 스키는 유지 (보이도록)
+	else:
+		# 3인칭이거나 1인칭에서 몸통 보기 모드면 모든 몸통 파츠 보이기
+		if torso:
+			torso.visible = true
+
+		# 팔 보이기
+		var left_upper_arm = left_arm.get_node_or_null("UpperArm") if left_arm else null
+		var left_ski_pole = left_arm.get_node_or_null("SkiPole") if left_arm else null
+		var right_upper_arm = right_arm.get_node_or_null("UpperArm") if right_arm else null
+		var right_ski_pole = right_arm.get_node_or_null("SkiPole") if right_arm else null
+
+		if left_upper_arm:
+			left_upper_arm.visible = true
+		if left_ski_pole:
+			left_ski_pole.visible = true
+		if right_upper_arm:
+			right_upper_arm.visible = true
+		if right_ski_pole:
+			right_ski_pole.visible = true
+
+		# 다리 보이기
+		var left_upper_leg = left_leg.get_node_or_null("UpperLeg") if left_leg else null
+		var left_lower_leg = left_leg.get_node_or_null("LowerLeg") if left_leg else null
+		var right_upper_leg = right_leg.get_node_or_null("UpperLeg") if right_leg else null
+		var right_lower_leg = right_leg.get_node_or_null("LowerLeg") if right_leg else null
+
+		if left_upper_leg:
+			left_upper_leg.visible = true
+		if left_lower_leg:
+			left_lower_leg.visible = true
+		if right_upper_leg:
+			right_upper_leg.visible = true
+		if right_lower_leg:
+			right_lower_leg.visible = true
 
 
 func _on_camera_mode_changed(mode_name: String) -> void:

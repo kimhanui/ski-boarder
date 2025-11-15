@@ -807,4 +807,323 @@ if is_airborne and Input.is_action_pressed("move_back"):
 
 ---
 
-**Last updated**: 2025-10-18 (Jump animation added, keyframe reference documented)
+## Player V3: State Machine (FSM)
+
+**버전**: V3
+**파일**: `scripts/player/player_v3.gd`
+**목적**: 명확한 상태 구분으로 디버깅 용이, 착지 실패 판정 및 자동 회복
+
+### PlayerState Enum
+
+```gdscript
+enum PlayerState {
+    IDLE,      // 0 - 정지 상태 (속도 0)
+    RIDING,    // 1 - 스키 타는 중
+    JUMP,      // 2 - 공중 점프 (트릭 없음)
+    FLIP,      // 3 - 공중 트릭 수행 중
+    LANDING,   // 4 - 착지 판정 중
+    FALLEN,    // 5 - 착지 실패, 넘어짐
+    RECOVER    // 6 - 일어나는 중
+}
+```
+
+---
+
+### State Transition Diagram
+
+```
+                          ┌─────────┐
+                          │  IDLE   │
+                          └────┬────┘
+                               │ speed > 0
+                               ▼
+                          ┌─────────┐
+                ┌────────►│ RIDING  │◄────────┐
+                │         └────┬────┘         │
+                │              │               │
+                │              │ Space or      │ Landing success
+                │              │ !is_on_floor()│
+                │              ▼               │
+                │         ┌─────────┐          │
+                │         │  JUMP   │          │
+                │         └────┬────┘          │
+                │              │               │
+                │              │ trick_mode ON │
+                │              │ height >= 1.5m│
+                │              │ W or S pressed│
+                │              ▼               │
+                │         ┌─────────┐          │
+                │         │  FLIP   │          │
+                │         └────┬────┘          │
+                │              │               │
+                │              │ is_on_floor() │
+                │              ▼               │
+                │         ┌─────────┐          │
+                │         │ LANDING │──────────┤
+                │         └────┬────┘          │
+                │              │               │
+                │              │ Landing failed│
+                │              ▼               │
+                │         ┌─────────┐          │
+                │         │ FALLEN  │          │
+                │         └────┬────┘          │
+                │              │ 1.5s or anim  │
+                │              ▼               │
+                │         ┌─────────┐          │
+                └─────────│ RECOVER │──────────┘
+                          └─────────┘
+                               │ 1.0s or anim
+                               ▼
+                          (back to RIDING)
+```
+
+---
+
+### State Details
+
+#### IDLE (정지)
+- **진입**: `current_speed <= 0` (RIDING에서 전환)
+- **입력**: W/S (속도 증가/감소)
+- **역할**: 호흡 애니메이션, 입력 대기
+- **전환**: `current_speed > 0` → RIDING
+
+#### RIDING (스키 타기)
+- **진입**: IDLE에서 `speed > 0` 또는 LANDING/RECOVER 성공 후
+- **입력**: W/S/A/D/Space
+- **역할**: 일반 스키 이동, 회전, 속도 제어
+- **전환**:
+  - Space 또는 `!is_on_floor()` → JUMP
+  - `current_speed <= 0` → IDLE
+
+#### JUMP (공중 점프)
+- **진입**: RIDING에서 Space 또는 낙하
+- **입력**: A/D (수평 회전), W/S (FLIP 전환 조건)
+- **역할**: 공중 수평 이동 유지
+- **트릭**: W/S 입력이 회전 로직 실행 **안 함** (FLIP 전환만)
+- **전환**:
+  - `trick_mode ON` + `height >= 1.5m` + `W or S` → FLIP
+  - `is_on_floor()` → LANDING
+
+#### FLIP (트릭 수행)
+- **진입**: JUMP에서 트릭 입력 (W/S) + 조건 충족
+- **입력**: W/S (트릭 회전), A/D (수평 회전)
+- **역할**: 플립 트릭 수행, 회전 누적
+- **트릭**: `_detect_trick_inputs()` 호출, `air_pitch` 누적 (360°/s)
+- **전환**: `is_on_floor()` → LANDING
+
+#### LANDING (착지 판정)
+- **진입**: JUMP 또는 FLIP에서 착지
+- **입력**: 없음 (자동 판정)
+- **역할**: 착지 성공/실패 판정
+- **판정 조건**:
+  - **성공**: `player_up · ground_normal >= 0.7` AND `|pitch/roll| <= 60°` AND `speed >= 1.0`
+  - **실패**: 조건 중 하나라도 미충족
+- **전환**:
+  - 성공 → RIDING
+  - 실패 → FALLEN
+
+#### FALLEN (넘어짐)
+- **진입**: LANDING 실패
+- **입력**: 없음 (자동 대기)
+- **역할**: 넘어진 애니메이션 재생
+- **물리**: `velocity = 0`, 중력 50% 감소
+- **전환**: 1.5초 또는 fall 애니메이션 종료 → RECOVER
+
+#### RECOVER (일어남)
+- **진입**: FALLEN 후 자동
+- **입력**: 없음 (자동 복귀)
+- **역할**: 일어나는 애니메이션 재생, rotation 보정
+- **전환**: 1.0초 또는 recover 애니메이션 종료 → RIDING
+
+---
+
+### JUMP vs FLIP 차이점
+
+| 항목 | JUMP 상태 | FLIP 상태 |
+|------|-----------|-----------|
+| **목적** | 공중 수평 이동만 | 트릭(플립) 수행 |
+| **W/S 입력** | FLIP 전환 조건으로만 작동 | 회전 로직 실행 (360°/s) |
+| **_detect_trick_inputs()** | 호출 안 함 | 매 프레임 호출 |
+| **air_pitch** | 0 유지 | 매 프레임 누적 |
+| **trick_rotation_x_total** | 0 유지 | 총 회전각 누적 |
+| **착지 점수** | 없음 | _calculate_trick_score() 호출 |
+| **중력** | GRAVITY * delta | GRAVITY * delta (동일) |
+
+**핵심**: JUMP는 W/S를 눌러도 회전 안 함. FLIP로 전환만 가능.
+
+---
+
+### Landing Failure Detection
+
+#### 착지 실패 조건 (하나라도 충족 시 FALLEN)
+
+**1. 몸체 기울기 체크** (`player_up · ground_normal < 0.7`)
+```gdscript
+var player_up = transform.basis.y
+var ground_normal = get_floor_normal()
+var dot = player_up.dot(ground_normal)
+
+if dot < 0.7:  # 약 45도 이상 기울어짐
+    return true  # 착지 실패
+```
+
+**2. 회전 각도 체크** (`|pitch| or |roll| > 60°`)
+```gdscript
+if abs(body.rotation_degrees.x) > 60.0:  # Pitch
+    return true
+if abs(body.rotation_degrees.z) > 60.0:  # Roll
+    return true
+```
+
+**3. 최소 속도 체크** (`current_speed < 1.0`)
+```gdscript
+if current_speed < 1.0:  # 1 m/s 이하
+    return true
+```
+
+#### 착지 성공 조건
+
+모든 조건 충족:
+- `player_up · ground_normal >= 0.7` (몸이 바로 섬)
+- `|body.rotation_degrees.x| <= 60°` (pitch 정상 범위)
+- `|body.rotation_degrees.z| <= 60°` (roll 정상 범위)
+- `current_speed >= 1.0 m/s` (충분한 속도)
+
+---
+
+### Auto Recovery System
+
+**착지 실패 시 자동 회복 흐름**:
+
+```
+LANDING (실패 판정)
+    ↓
+FALLEN (1.5초 대기)
+    ↓ fall 애니메이션 종료
+RECOVER (1.0초 대기)
+    ↓ recover 애니메이션 종료
+RIDING (정상 복귀)
+```
+
+**FALLEN 상태** (`_process_fallen`):
+- `velocity = Vector3.ZERO` (움직임 정지)
+- 중력 50% 감소 (`GRAVITY * 0.5`)
+- `fallen_timer` 카운트 (1.5초)
+- fall 애니메이션 재생
+
+**RECOVER 상태** (`_process_recover`):
+- `velocity = Vector3.ZERO` (계속 정지)
+- `body.rotation` 보정 (0으로 리셋)
+- `recover_timer` 카운트 (1.0초)
+- recover 애니메이션 재생
+
+**장점**:
+- 플레이어 입력 없이 자동 복귀
+- 게임 흐름 끊김 최소화
+- 상태 전환 명확
+
+---
+
+### trick_mode와 State Transition
+
+#### trick_mode = false
+```
+RIDING → JUMP → LANDING → RIDING
+         (W/S 입력 무시, FLIP 전환 불가)
+```
+
+#### trick_mode = true
+```
+RIDING → JUMP → FLIP → LANDING → RIDING
+         (W/S 입력 시 FLIP 전환)
+```
+
+#### JUMP → FLIP 전환 조건
+
+3가지 모두 충족 필요:
+1. `trick_mode_enabled = true`
+2. `_get_height_above_ground() >= MIN_TRICK_HEIGHT` (1.5m)
+3. `Input.is_action_pressed("move_back")` OR `Input.is_action_pressed("move_forward")`
+
+**MIN_TRICK_HEIGHT** (1.5m):
+- 너무 낮은 점프에서 트릭 방지
+- FLIP 상태에서도 높이 < 1.5m이면 회전 속도 감쇠
+
+---
+
+### State Processing Pattern
+
+**일관된 처리 순서**:
+
+```gdscript
+func _process_STATE(delta):
+    # 1. 물리 계산 (중력, 점프 속도 등)
+    if [physical_condition]:
+        velocity.y = ...
+
+    # 2. 입력 처리
+    var input = Input.get_...()
+
+    # 3. 로직 실행
+    _handle_turning(...)
+    _handle_speed(...)
+
+    # 4. velocity 적용
+    _apply_velocity(delta)
+
+    # 5. 애니메이션
+    _update_animations(...)
+
+    # 6. 상태 전환 (마지막)
+    if [transition_condition]:
+        set_state(NewState)
+```
+
+**핵심 원칙**:
+- velocity 적용은 **상태 전환 전**
+- 상태 전환은 **함수 마지막**
+- 즉시 전환 필요 시 velocity 먼저 적용 후 `return`
+
+---
+
+### Debugging
+
+#### State Label (UI)
+```gdscript
+@onready var state_label = $UI/StateLabel
+func _update_state_ui():
+    state_label.text = "State: " + PlayerState.keys()[state]
+```
+
+화면에 실시간 상태 표시 (노란색 Label)
+
+#### Console Logs
+```
+[FSM] IDLE → RIDING
+[RIDING] Entered - Ready to ride
+[JUMP] Entered - Jumping
+[Trick] Starting Backflip!
+[LANDING] SUCCESS - All conditions passed
+[LANDING] FAILED - Pitch=120.0° (threshold=60.0°)
+[FALLEN] Entered - Player fell down
+[RECOVER] Entered - Getting back up
+[FSM] Resetting body pose to default
+```
+
+---
+
+### V2 vs V3 비교
+
+| 기능 | V2 (player_v2.gd) | V3 (player_v3.gd) |
+|------|-------------------|-------------------|
+| **상태 관리** | JumpState (5개) | PlayerState FSM (7개) |
+| **착지 실패** | 없음 | 3가지 조건 체크 |
+| **자동 회복** | 없음 | FALLEN → RECOVER → RIDING |
+| **UI 상태 표시** | 없음 | StateLabel 실시간 표시 |
+| **애니메이션** | Procedural만 | AnimationPlayer + Procedural |
+| **디버깅** | 제한적 | 상태 전환 로그 상세 |
+| **코드 구조** | 순차 처리 | 상태별 독립 함수 |
+
+---
+
+**Last updated**: 2025-11-15 (V3 FSM added with landing failure detection and auto-recovery)

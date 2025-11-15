@@ -4,9 +4,10 @@
 
 ## Overview
 
-**현재 버전**: V2 (Enhanced Animation System)
-**파일**: `scripts/player/player_v2.gd`, `scenes/player/player.tscn`
+**현재 버전**: V3 (FSM-based State Management with Auto-Recovery)
+**파일**: `scripts/player/player_v3.gd`, `scenes/player/player.tscn`
 **스타일**: 로우폴리 치비 비율 (Low-poly chibi proportions)
+**주요 기능**: 상태 머신(FSM) 기반 상태 관리, 착지 실패 판정, 자동 회복 시스템
 
 ---
 
@@ -955,39 +956,39 @@ enum PlayerState {
 
 ### Landing Failure Detection
 
-#### 착지 실패 조건 (하나라도 충족 시 FALLEN)
+#### 착지 판정 기준 (Tilt-only)
 
-**1. 몸체 기울기 체크** (`player_up · ground_normal < 0.7`)
+**단일 조건**: 몸체 기울기 (Tilt) 60도 이내
+
 ```gdscript
-var player_up = transform.basis.y
-var ground_normal = get_floor_normal()
-var dot = player_up.dot(ground_normal)
+const LANDING_TILT_THRESHOLD = 0.5  # 60° (dot product)
 
-if dot < 0.7:  # 약 45도 이상 기울어짐
-    return true  # 착지 실패
+func _check_landing_failed() -> bool:
+    # Check body tilt against ground normal
+    # IMPORTANT: Use body.transform (rotating Body node), NOT transform (static CharacterBody3D)
+    var player_up = body.transform.basis.y
+    var ground_normal = get_floor_normal()
+    var dot = player_up.dot(ground_normal)
+
+    if dot < LANDING_TILT_THRESHOLD:
+        return true  # 착지 실패
+
+    return false  # 착지 성공
 ```
 
-**2. 회전 각도 체크** (`|pitch| or |roll| > 60°`)
-```gdscript
-if abs(body.rotation_degrees.x) > 60.0:  # Pitch
-    return true
-if abs(body.rotation_degrees.z) > 60.0:  # Roll
-    return true
-```
+#### 착지 성공/실패 기준
 
-**3. 최소 속도 체크** (`current_speed < 1.0`)
-```gdscript
-if current_speed < 1.0:  # 1 m/s 이하
-    return true
-```
+| 조건 | 성공 | 실패 |
+|------|------|------|
+| **Tilt** | ≤ 60° (dot ≥ 0.5) | > 60° (dot < 0.5) |
+| **Pitch** | ~~제거됨~~ | ~~제거됨~~ |
+| **Roll** | ~~제거됨~~ | ~~제거됨~~ |
+| **속도** | ~~제거됨~~ | ~~제거됨~~ |
 
-#### 착지 성공 조건
-
-모든 조건 충족:
-- `player_up · ground_normal >= 0.7` (몸이 바로 섬)
-- `|body.rotation_degrees.x| <= 60°` (pitch 정상 범위)
-- `|body.rotation_degrees.z| <= 60°` (roll 정상 범위)
-- `current_speed >= 1.0 m/s` (충분한 속도)
+**Transform 주의사항**:
+- ✅ **올바름**: `body.transform.basis.y` (회전하는 Body 노드)
+- ❌ **틀림**: `transform.basis.y` (고정된 CharacterBody3D)
+- Flip 시 Body 노드만 회전하므로 반드시 `body.transform` 사용
 
 ---
 
@@ -1126,4 +1127,7 @@ func _update_state_ui():
 
 ---
 
-**Last updated**: 2025-11-15 (V3 FSM added with landing failure detection and auto-recovery)
+**Last updated**: 2025-11-15
+- V3 FSM added with landing failure detection and auto-recovery
+- Landing simplified to tilt-only check (60° threshold)
+- Transform bug fixed: use body.transform instead of transform

@@ -23,6 +23,10 @@ func _ready() -> void:
 	current = false
 
 
+## 입력 처리 - 카메라가 활성화되었을 때만 처리
+## 중요: `return`으로 조기 종료해도 이벤트는 소비되지 않음!
+## 이벤트를 명시적으로 소비하려면 `get_viewport().set_input_as_handled()` 호출 필요
+## 현재 구현은 비활성 시 이벤트를 전파하므로 UI 버튼 클릭에 영향 없음
 func _input(event: InputEvent) -> void:
 	if not _is_active:
 		return

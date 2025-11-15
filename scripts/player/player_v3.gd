@@ -22,9 +22,7 @@ const JUMP_RAMP_BOOST = 1.3
 const GRAVITY = 9.8
 
 # Landing failure detection constants
-const LANDING_DOT_THRESHOLD = 0.7  # player_up · ground_normal threshold (45° tilt)
-const LANDING_ROTATION_THRESHOLD = 60.0  # Max pitch/roll in degrees
-const LANDING_MIN_SPEED = 1.0  # Minimum speed for successful landing (m/s)
+const LANDING_TILT_THRESHOLD = 0.5  # Body tilt threshold: 60° (dot product with ground normal)
 
 # Animation constants
 const TILT_AMOUNT = 30.0
@@ -77,9 +75,8 @@ const STEER_YAW_DAMPING = 0.92
 # UI references
 @onready var camera_mode_label = $UI/CameraModeLabel
 @onready var speed_label = $UI/SpeedLabel
-@onready var trick_guide_label = $UI/TrickGuideLabel
-@onready var trick_display_label = $UI/TrickDisplayLabel
 @onready var state_label = $UI/StateLabel  # FSM state display
+@onready var air_rotation_label = $UI/AirRotationLabel
 
 # Systems
 @onready var ski_tracks = $SkiTracks
@@ -117,8 +114,6 @@ var spawn_rotation: float
 
 # Trick system
 var current_trick: String = ""
-var trick_display_timer: float = 0.0
-const TRICK_DISPLAY_DURATION = 2.0
 var air_pitch: float = 0.0
 var trick_rotation_x_total: float = 0.0
 var trick_flip_speed: float = 0.0
@@ -152,7 +147,6 @@ func _ready() -> void:
 		ski_tracks.player = self
 
 	# Initialize UI
-	_initialize_trick_ui()
 	_update_state_ui()
 
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -358,6 +352,7 @@ func _physics_process(delta: float) -> void:
 
 	# Update UI
 	_update_speed_ui()
+	_update_air_rotation_ui()
 
 	# Debug fall detection
 	if global_position.y < -50:
@@ -505,32 +500,20 @@ func _process_recover(delta: float) -> void:
 			set_state(PlayerState.RIDING)
 
 
-## Landing failure detection
+## Landing failure detection - Tilt-only check
 func _check_landing_failed() -> bool:
-	# Condition 1: Check player orientation (player_up · ground_normal)
-	var player_up = transform.basis.y
+	# Check body tilt against ground normal (60° threshold)
+	# Use body.transform to track the rotating Body node, not the static CharacterBody3D
+	var player_up = body.transform.basis.y
 	var ground_normal = get_floor_normal()
 	var dot = player_up.dot(ground_normal)
 
-	if dot < LANDING_DOT_THRESHOLD:
-		print("[LANDING] FAILED - Body tilt too much (dot=%.2f, threshold=%.2f)" % [dot, LANDING_DOT_THRESHOLD])
+	if dot < LANDING_TILT_THRESHOLD:
+		var tilt_angle = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
+		print("[LANDING] FAILED - Body tilt=%.1f° (threshold=60°)" % tilt_angle)
 		return true
 
-	# Condition 2: Check body rotation angles (backup check)
-	if abs(body.rotation_degrees.x) > LANDING_ROTATION_THRESHOLD:
-		print("[LANDING] FAILED - Pitch=%.1f° (threshold=%.1f°)" % [body.rotation_degrees.x, LANDING_ROTATION_THRESHOLD])
-		return true
-
-	if abs(body.rotation_degrees.z) > LANDING_ROTATION_THRESHOLD:
-		print("[LANDING] FAILED - Roll=%.1f° (threshold=%.1f°)" % [body.rotation_degrees.z, LANDING_ROTATION_THRESHOLD])
-		return true
-
-	# Condition 3: Check minimum speed
-	if current_speed < LANDING_MIN_SPEED:
-		print("[LANDING] FAILED - Speed too low (%.1f m/s, threshold=%.1f)" % [current_speed, LANDING_MIN_SPEED])
-		return true
-
-	print("[LANDING] SUCCESS - All conditions passed")
+	print("[LANDING] SUCCESS - Body tilt OK")
 	return false
 
 
@@ -689,15 +672,19 @@ func _detect_trick_inputs() -> void:
 	_apply_air_trick_rotations()
 
 
+## Apply air trick rotations to body
+## Note: Head는 Body의 자식이므로 자동으로 회전을 상속받음
+## 따라서 head.position이나 head.rotation을 별도로 수정하지 않음
+## (부모 회전 시 자식의 로컬 축도 회전되므로 position 수정은 버그 발생)
 func _apply_air_trick_rotations() -> void:
 	body.rotation_degrees.x = air_pitch
 	body.rotation.y = 0.0
 	body.rotation_degrees.z = 0.0
 
+	# Head는 Body의 자식이므로 자동으로 body 회전을 따라감
+	# head.position.z를 수정하지 않음 (이전 버그: flip 시 머리가 떨어져 나감)
 	if head:
-		head.rotation = Vector3.ZERO
-		var head_forward_offset = -air_pitch * 0.01
-		head.position.z = head_forward_offset
+		head.rotation = Vector3.ZERO  # 착지 후 리셋용
 
 
 ## Helper functions (from v2)
@@ -921,7 +908,11 @@ func _update_body_yaw_follow(delta: float) -> void:
 
 ## Camera and UI functions (from v2)
 
-func _input(event: InputEvent) -> void:
+## 플레이어 입력 처리
+## Note: _unhandled_input() 사용으로 GUI 입력 우선권 보장
+## GUI(버튼, TextEdit 등)가 먼저 처리하고, 처리 안 된 입력만 여기로 옴
+## 이렇게 하면 UI 버튼 클릭 시 Player가 입력을 가로채지 않음
+func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_camera"):
 		camera_mode = (camera_mode + 1) % 4
 		_apply_camera_mode()
@@ -1004,25 +995,28 @@ func _update_speed_ui() -> void:
 		speed_label.text = "V3 | 속도: %.1f m/s | 스케이팅: %s (< %.1f)" % [current_speed, skating_status, SKATING_SPEED_THRESHOLD]
 
 
-func _initialize_trick_ui() -> void:
-	if trick_guide_label:
-		var guide_text = "공중 트릭: W=Frontflip | S=Backflip\n360° 배수로 착지하면 성공!"
-		trick_guide_label.text = guide_text
-		trick_guide_label.visible = trick_mode_enabled
+func _update_air_rotation_ui() -> void:
+	if air_rotation_label:
+		# Only show when in air (JUMP or FLIP state)
+		if state == PlayerState.JUMP or state == PlayerState.FLIP:
+			# Calculate body tilt angle (dot product → degrees)
+			# Use body.transform to track the rotating Body node, not the static CharacterBody3D
+			var player_up = body.transform.basis.y
+			var ground_up = Vector3.UP
+			var dot = player_up.dot(ground_up)
+			var tilt_angle = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
 
-	if trick_display_label:
-		trick_display_label.text = ""
-		trick_display_label.visible = false
+			# Get pitch and roll from body rotation
+			var pitch = body.rotation_degrees.x
+			var roll = body.rotation_degrees.z
 
-
-func _update_trick_display(delta: float) -> void:
-	if trick_display_timer > 0.0:
-		trick_display_timer -= delta
-
-		if trick_display_timer <= 0.0:
-			if trick_display_label:
-				trick_display_label.visible = false
-			current_trick = ""
+			# Update label text and make visible
+			air_rotation_label.text = "Tilt: %.1f° | Pitch: %.1f° | Roll: %.1f°" % [tilt_angle, pitch, roll]
+			air_rotation_label.visible = true
+			air_rotation_label.add_theme_color_override("font_color", Color(1, 1, 0))  # Yellow
+		else:
+			# Hide when not in air
+			air_rotation_label.visible = false
 
 
 func set_trick_mode(enabled: bool) -> void:
@@ -1033,12 +1027,6 @@ func set_trick_mode(enabled: bool) -> void:
 	else:
 		steer_yaw = 0.0
 		velocity_heading = rotation.y
-
-	if trick_guide_label:
-		trick_guide_label.visible = trick_mode_enabled
-
-	if not trick_mode_enabled and trick_display_label:
-		trick_display_label.visible = false
 
 	trick_mode_changed.emit(trick_mode_enabled)
 

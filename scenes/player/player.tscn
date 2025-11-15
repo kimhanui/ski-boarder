@@ -206,31 +206,15 @@ theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 0, 1)
 text = "State: IDLE"
 
-[node name="TrickGuideLabel" type="Label" parent="UI"]
+[node name="AirRotationLabel" type="Label" parent="UI"]
 offset_left = 10.0
 offset_top = 100.0
-offset_right = 1000.0
-offset_bottom = 160.0
-theme_override_font_sizes/font_size = 16
-text = "공중 트릭 가이드"
-autowrap_mode = 3
-
-[node name="TrickDisplayLabel" type="Label" parent="UI"]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -300.0
-offset_top = -150.0
-offset_right = 300.0
-offset_bottom = -50.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_font_sizes/font_size = 48
-text = "TRICK NAME"
-horizontal_alignment = 1
-vertical_alignment = 1
+offset_right = 400.0
+offset_bottom = 130.0
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Tilt: 0° | Pitch: 0° | Roll: 0°"
+visible = false
 
 [node name="SkiTracks" type="Node3D" parent="."]
 script = ExtResource("3_ski_tracks")

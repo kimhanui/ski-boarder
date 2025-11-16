@@ -5,7 +5,8 @@
 [ext_resource type="Script" uid="uid://dmerbx0ekj66e" path="res://scripts/player/ski_tracks.gd" id="3_ski_tracks"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-height = 1.8
+height = 2.19
+radius = 0.3
 
 [sub_resource type="SphereMesh" id="SphereMesh_head"]
 radius = 0.25
@@ -13,11 +14,9 @@ height = 0.5
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_skin"]
 albedo_color = Color(1, 0.9, 0.8, 1)
-emission_intensity = 1000.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
-emission_intensity = 1000.0
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
 radius = 0.25
@@ -25,7 +24,6 @@ height = 0.8
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jacket"]
 albedo_color = Color(0.2, 0.4, 0.8, 1)
-emission_intensity = 1000.0
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_limb"]
 radius = 0.08
@@ -40,7 +38,6 @@ height = 1.2
 albedo_color = Color(0.3, 0.3, 0.3, 1)
 metallic = 0.7
 roughness = 0.3
-emission_intensity = 1000.0
 
 [sub_resource type="PrismMesh" id="PrismMesh_ski"]
 left_to_right = 0.0
@@ -48,7 +45,6 @@ size = Vector3(0.15, 0.05, 1.2)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ski"]
 albedo_color = Color(0.9, 0.1, 0.1, 1)
-emission_intensity = 1000.0
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_snow"]
 direction = Vector3(0, -1, -1)
@@ -64,7 +60,7 @@ script = ExtResource("1_player_script")
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.195, 0)
 shape = SubResource("CapsuleShape3D_1")
 
 [node name="Body" type="Node3D" parent="."]
@@ -124,18 +120,14 @@ mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="LowerLeg" type="MeshInstance3D" parent="Body/LeftLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.67, 0)
 mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="Ski" type="MeshInstance3D" parent="Body/LeftLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.965, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
-
-[node name="SkiRayCast" type="RayCast3D" parent="Body/LeftLeg/Ski"]
-target_position = Vector3(0, -0.5, 0)
-collision_mask = 2
 
 [node name="RightLeg" type="Node3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, -0.3, 0)
@@ -146,18 +138,14 @@ mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="LowerLeg" type="MeshInstance3D" parent="Body/RightLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.67, 0)
 mesh = SubResource("CapsuleMesh_limb")
 surface_material_override/0 = SubResource("StandardMaterial3D_jacket")
 
 [node name="Ski" type="MeshInstance3D" parent="Body/RightLeg"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, -0.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.965, -0.3)
 mesh = SubResource("PrismMesh_ski")
 surface_material_override/0 = SubResource("StandardMaterial3D_ski")
-
-[node name="SkiRayCast" type="RayCast3D" parent="Body/RightLeg/Ski"]
-target_position = Vector3(0, -0.5, 0)
-collision_mask = 2
 
 [node name="Camera3D_ThirdPerson" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 3, 5)
@@ -218,3 +206,4 @@ visible = false
 
 [node name="SkiTracks" type="Node3D" parent="."]
 script = ExtResource("3_ski_tracks")
+player = NodePath("..")

@@ -284,10 +284,10 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	var array_mesh = ArrayMesh.new()
 	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
-	# Create material with sparkling snow properties
+	# Create material with pure white snow (same as V2 terrain)
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.95, 0.95, 0.98)  # Bright snow with slight blue tint
-	material.roughness = 0.4  # Smooth surface for reflective sparkle
+	material.albedo_color = Color(1.0, 1.0, 1.0)  # Pure white for maximum shadow visibility
+	material.roughness = 0.3  # Smooth surface for clean shadow edges (same as V2)
 	material.metallic = 0.0
 	material.emission_enabled = false  # Disable emission to improve shadow contrast
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
@@ -305,7 +305,10 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	static_body.name = "Terrain"
 	static_body.collision_layer = 2  # Environment layer
 	static_body.collision_mask = 0
-	static_body.add_to_group("terrain_static")  # For obstacle raycast detection
+	# Add to terrain group for:
+	# 1. Obstacle placement raycast detection (used by obstacle_factory.gd)
+	# 2. Ski track collision detection (used by player_v3.gd)
+	static_body.add_to_group("terrain")
 
 	# Create collision shape from mesh
 	var collision_shape = CollisionShape3D.new()
@@ -314,18 +317,54 @@ static func _build_terrain_mesh(terrain_data: Dictionary) -> StaticBody3D:
 	concave_shape.set_faces(faces)
 	collision_shape.shape = concave_shape
 
-	# Raise collision shape above visual mesh so skis appear on top of snow
-	collision_shape.position.y = 0.5  # 50cm above visual terrain
+	# Raise collision shape slightly above visual mesh so skis appear on top of snow
+	collision_shape.position.y = 0.01  # 1cm above visual terrain
 
 	print("Collision shape created: %d faces" % [faces.size() / 3])
 
 	static_body.add_child(mesh_instance)
 	static_body.add_child(collision_shape)
 
+	# Add yellow debug mesh to visualize collision boundary (temporarily disabled)
+	# var debug_mesh = _create_collision_debug_mesh(array_mesh, collision_shape.position.y)
+	# if debug_mesh:
+	# 	static_body.add_child(debug_mesh)
+
 	# Add debug boundary markers
 	_add_debug_boundaries(static_body, width_m, terrain_data.get("length_m", 1500))
 
 	return static_body
+
+
+static func _create_collision_debug_mesh(terrain_mesh: ArrayMesh, offset_y: float) -> MeshInstance3D:
+	"""
+	Creates a yellow semi-transparent mesh to visualize the collision boundary.
+	The mesh is identical to the terrain mesh but positioned at the collision offset.
+	"""
+	var debug_instance = MeshInstance3D.new()
+	debug_instance.mesh = terrain_mesh
+	debug_instance.name = "CollisionDebugMesh"
+
+	# Position at collision offset
+	debug_instance.position.y = offset_y
+
+	# Create yellow semi-transparent material
+	var debug_material = StandardMaterial3D.new()
+	debug_material.albedo_color = Color(1.0, 1.0, 0.0, 0.3)  # Yellow with 30% opacity
+	debug_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	debug_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always visible
+	debug_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	debug_material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED  # Don't occlude other objects
+
+	debug_instance.material_override = debug_material
+
+	# Don't cast shadows or participate in GI
+	debug_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	debug_instance.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+
+	print("[Terrain] Collision debug mesh created at Y offset: %.3f m (yellow overlay)" % offset_y)
+
+	return debug_instance
 
 
 static func _add_debug_boundaries(parent: Node3D, width_m: float, length_m: float) -> void:

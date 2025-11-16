@@ -11,6 +11,7 @@ extends Node3D
 @onready var trick_score_display: Control = $UI/TrickScoreDisplay
 @onready var trick_mode_button: Button = $UI/TrickModeButton
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
+@onready var light_control: VBoxContainer = $UI/LightControl
 
 
 func _ready() -> void:
@@ -48,23 +49,47 @@ func _ready() -> void:
 		_update_trick_mode_button_text()
 		print("[Main] Trick mode button connected to player")
 
+	# Connect LightControl to DirectionalLight3D
+	if light_control and directional_light:
+		light_control.set_light(directional_light)
+		print("[Main] Light control connected to directional light")
+
 	print("Main scene initialized")
 	print("Press F1 to cycle camera modes")
+	print("Press L to cycle terrain version (V1/V2/V3)")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_terrain"):
+		_toggle_terrain_version()
+
+
+func _toggle_terrain_version() -> void:
+	if procedural_slope and procedural_slope.has_method("toggle_terrain_version"):
+		procedural_slope.toggle_terrain_version()
+		var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
+		print("[Main] Terrain toggled to: %s" % version_names[procedural_slope.terrain_version])
 
 
 ## Enforce shadow settings at runtime (prevent Godot editor auto-removal)
 func _enforce_shadow_settings() -> void:
 	if directional_light:
 		directional_light.shadow_enabled = true
-		directional_light.shadow_opacity = 1.0
+		directional_light.shadow_opacity = 0.75
 		directional_light.shadow_bias = 0.1
 		directional_light.shadow_normal_bias = 1.0
-		directional_light.directional_shadow_max_distance = 3000.0
+
+		# IMPORTANT: Max distance must be 500m for shadows to render properly
+		directional_light.directional_shadow_max_distance = 500.0
 		directional_light.directional_shadow_fade_start = 0.8
-		print("[Main] Shadow settings enforced: enabled=%s, opacity=%.1f, bias=%.2f" % [
+
+		# WARNING: DO NOT set light_angular_distance - it causes shadows to disappear!
+		# directional_light.light_angular_distance = 0.5  # ← NEVER USE THIS
+
+		print("[Main] Shadow settings enforced: enabled=%s, opacity=%.2f, max_distance=%.0fm" % [
 			directional_light.shadow_enabled,
 			directional_light.shadow_opacity,
-			directional_light.shadow_bias
+			directional_light.directional_shadow_max_distance
 		])
 
 

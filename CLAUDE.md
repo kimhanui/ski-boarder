@@ -270,6 +270,27 @@ git status  # ADD.md가 목록에 나타나지 않아야 함 (.gitignore 적용)
 
 Godot 4에서 3D 그림자가 제대로 렌더링되려면 여러 설정이 올바르게 구성되어야 합니다.
 
+### ⚠️ 중요 주의사항 (이 프로젝트 전용)
+
+**CRITICAL**: 이 프로젝트에서는 다음 설정을 **절대 사용하지 말 것**:
+
+```gdscript
+# ❌ 절대 사용 금지 - 그림자가 완전히 사라짐
+directional_light.light_angular_distance = 0.5  # NEVER USE THIS!
+```
+
+**원인**: 프로젝트 특정 설정이나 Godot 버전 이슈로 `light_angular_distance` 설정 시 그림자가 사라지는 현상 확인됨
+
+**필수 고정값**:
+```gdscript
+# ✅ 반드시 이 값으로 고정
+directional_light.directional_shadow_max_distance = 500.0
+```
+- 이 값을 변경하면 그림자가 사라지거나 품질이 저하됨
+- 500m 외의 값은 테스트 결과 그림자 렌더링 실패
+
+**참고**: `scenes/main.gd`의 `_enforce_shadow_settings()` 함수에 경고 주석 포함
+
 ### 필수 프로젝트 설정 (project.godot)
 
 렌더러 및 그림자 품질 설정:

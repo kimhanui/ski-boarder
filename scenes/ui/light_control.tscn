@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3 uid="uid://light_control_scene"]
+
+[ext_resource type="Script" path="res://scenes/ui/light_control.gd" id="1_light_control_script"]
+
+[node name="LightControl" type="VBoxContainer"]
+anchors_preset = 0
+anchor_left = 0.0
+anchor_right = 0.0
+offset_left = 40.0
+offset_top = 250.0
+offset_right = 270.0
+offset_bottom = 330.0
+grow_horizontal = 0
+script = ExtResource("1_light_control_script")
+
+[node name="PitchLabel" type="Label" parent="."]
+layout_mode = 2
+text = "Light Pitch (상하): -45°"
+
+[node name="PitchSlider" type="HSlider" parent="."]
+layout_mode = 2
+focus_mode = 0
+min_value = -90.0
+max_value = 0.0
+step = 1.0
+value = -45.0

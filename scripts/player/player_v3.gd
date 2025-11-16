@@ -68,10 +68,6 @@ const STEER_YAW_DAMPING = 0.92
 @onready var left_eye = $Body/Head/LeftEye
 @onready var right_eye = $Body/Head/RightEye
 
-# Ski raycasts
-@onready var left_ski_raycast = $Body/LeftLeg/Ski/SkiRayCast
-@onready var right_ski_raycast = $Body/RightLeg/Ski/SkiRayCast
-
 # UI references
 @onready var camera_mode_label = $UI/CameraModeLabel
 @onready var speed_label = $UI/SpeedLabel
@@ -131,6 +127,11 @@ var recover_timer: float = 0.0
 const FALLEN_DURATION = 1.5  # Duration of fall animation
 const RECOVER_DURATION = 1.0  # Duration of recover animation
 
+# Ski track collision detection
+@export var track_creation_interval := 0.03  # Seconds between track creation
+var track_timer := 0.0
+var touching_parts := {}  # Dictionary of body parts currently touching terrain
+
 
 func _ready() -> void:
 	add_to_group("player")
@@ -145,6 +146,9 @@ func _ready() -> void:
 	# Connect ski tracks
 	if ski_tracks:
 		ski_tracks.player = self
+
+	# Setup collision detection for body parts
+	_setup_body_part_collision_detection()
 
 	# Initialize UI
 	_update_state_ui()
@@ -349,6 +353,12 @@ func _physics_process(delta: float) -> void:
 
 	# Apply physics movement
 	move_and_slide()
+
+	# Ski track creation timer
+	track_timer += delta
+	if track_timer >= track_creation_interval:
+		track_timer = 0.0
+		_create_tracks_for_touching_parts()
 
 	# Update UI
 	_update_speed_ui()
@@ -1102,3 +1112,108 @@ func _enable_player_shadows() -> void:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 	print("[Player V3] Shadows enabled for %d meshes" % mesh_nodes.size())
+
+
+## Ski track collision detection setup
+func _setup_body_part_collision_detection():
+	var body_parts = [
+		"Body/Head",
+		"Body/Torso",
+		"Body/LeftArm/UpperArm",
+		"Body/RightArm/UpperArm",
+		"Body/LeftLeg/UpperLeg",
+		"Body/LeftLeg/LowerLeg",
+		"Body/LeftLeg/Ski",
+		"Body/RightLeg/UpperLeg",
+		"Body/RightLeg/LowerLeg",
+		"Body/RightLeg/Ski"
+	]
+
+	for part_path in body_parts:
+		if has_node(part_path):
+			var part_node = get_node(part_path)
+			_add_collision_area_to_part(part_node, part_path)
+
+func _add_collision_area_to_part(part: Node3D, part_name: String):
+	var area = Area3D.new()
+	area.name = "CollisionDetector"
+	area.collision_layer = 0
+	area.collision_mask = 2  # Terrain layer
+
+	var collision_shape = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+
+	# Extract mesh size automatically
+	var mesh_size = _get_mesh_size(part)
+	shape.size = mesh_size
+
+	collision_shape.shape = shape
+	area.add_child(collision_shape)
+
+	# DEBUG: Visualize collision box with red mesh
+	var debug_mesh = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = mesh_size
+	debug_mesh.mesh = box_mesh
+
+	var debug_material = StandardMaterial3D.new()
+	debug_material.albedo_color = Color(1.0, 0.0, 0.0, 0.3)  # Red, semi-transparent
+	debug_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	debug_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides
+	debug_mesh.material_override = debug_material
+
+	area.add_child(debug_mesh)
+
+	# Connect signals
+	area.body_entered.connect(_on_body_part_touched_ground.bind(part, part_name))
+	area.body_exited.connect(_on_body_part_left_ground.bind(part_name))
+
+	part.add_child(area)
+
+	print("[Player] Collision area added to: ", part_name, " size: ", mesh_size)
+
+func _get_mesh_size(node: Node3D) -> Vector3:
+	if node is MeshInstance3D:
+		var mesh = node.mesh
+		if mesh is PrismMesh:  # Skis
+			return mesh.size
+		elif mesh is SphereMesh:  # Head
+			var radius = mesh.radius
+			return Vector3(radius * 2, radius * 2, radius * 2)
+		elif mesh is CapsuleMesh:  # Torso, Arms, Legs
+			var radius = mesh.radius
+			var height = mesh.height
+			return Vector3(radius * 2, height, radius * 2)
+
+	return Vector3(0.3, 0.3, 0.3)  # Default fallback
+
+func _on_body_part_touched_ground(body: Node, part: Node3D, part_name: String):
+	if body.is_in_group("terrain"):
+		# DEBUG_COLLISION - Remove after testing
+		print("[충돌] part_name: ", part_name)
+		print("[충돌] part.name: ", part.name)
+		print("[충돌] part.global_position: ", part.global_position)
+		# END DEBUG_COLLISION
+		touching_parts[part_name] = part
+
+func _on_body_part_left_ground(body: Node, part_name: String):
+	if body.is_in_group("terrain"):
+		touching_parts.erase(part_name)
+		print("[충돌종료] part_name: ", part_name, " | Remaining: ", touching_parts.keys())
+
+func _create_tracks_for_touching_parts():
+	for part_name in touching_parts:
+		var part = touching_parts[part_name]
+		var mesh_size = _get_mesh_size(part)
+
+		# DEBUG_TRACK - Remove after testing
+		print("[자국생성] part_name: ", part_name)
+		print("[자국생성] part.global_position: ", part.global_position)
+		# END DEBUG_TRACK
+
+		if ski_tracks:
+			ski_tracks.create_track_at_position(
+				part.global_position,
+				mesh_size,
+				part_name
+			)

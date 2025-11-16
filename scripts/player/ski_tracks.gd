@@ -7,21 +7,16 @@ class_name SkiTracks
 signal tracks_updated(track_count: int)
 
 @export var player: CharacterBody3D  # Reference to player
-@export var max_tracks := 200  # Maximum number of track decals
-@export var track_spacing := 0.5  # Minimum distance between tracks (meters)
-@export var track_lifetime := 90.0  # Fade time (seconds)
-@export var track_width := 0.15  # Width of ski track
-@export var track_length := 1.2  # Length of ski track
+@export var max_tracks := 500  # Maximum number of track decals
+@export var track_lifetime := 30.0  # Fade time (seconds)
+@export var track_width := 2.0  # Width of ski track (enlarged for testing)
+@export var track_length := 5.0  # Length of ski track (enlarged for testing)
 
 # Decal material
 var track_material: StandardMaterial3D
 
 # Active track decals
 var active_tracks: Array[Dictionary] = []  # {decal: Decal, spawn_time: float, position: Vector3}
-
-# Last track position
-var last_track_position := Vector3.ZERO
-var last_track_rotation := 0.0
 
 # Track mesh (simple quad)
 var track_mesh: Mesh
@@ -33,17 +28,14 @@ func _ready() -> void:
 
 	if not player:
 		push_warning("SkiTracks: No player reference set!")
-	else:
-		# Initialize last position to player's current position
-		last_track_position = player.global_position
 
 
 ## Create material for ski tracks
 func _create_track_material() -> void:
 	track_material = StandardMaterial3D.new()
 
-	# Dark compacted snow
-	track_material.albedo_color = Color(0.7, 0.7, 0.75, 0.8)
+	# Bright red for testing visibility
+	track_material.albedo_color = Color(1.0, 0.0, 0.0, 1.0)
 
 	# Transparent for fading
 	track_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -61,64 +53,8 @@ func _create_track_mesh() -> void:
 
 
 func _process(delta: float) -> void:
-	if not player or not player.is_on_floor():
-		return
-
-	# Check if player moved enough to create new track
-	var player_pos = player.global_position
-	var distance_moved = player_pos.distance_to(last_track_position)
-
-	if distance_moved >= track_spacing:
-		_create_track_decal(player_pos, player.rotation.y)
-		last_track_position = player_pos
-		last_track_rotation = player.rotation.y
-		if active_tracks.size() == 1:
-			print("SkiTracks: First track created at ", player_pos)
-
 	# Update and fade tracks
 	_update_tracks(delta)
-
-
-## Create ski track decal at position
-func _create_track_decal(pos: Vector3, yaw: float) -> void:
-	# Remove oldest track if at limit
-	if active_tracks.size() >= max_tracks:
-		_remove_track(0)
-
-	# Create decal node (projected onto terrain)
-	var decal = Decal.new()
-
-	# Position slightly above ground
-	decal.global_position = pos + Vector3(0, 0.05, 0)
-
-	# Rotate to match ski direction
-	decal.rotation.y = yaw
-
-	# Rotate to project downward
-	decal.rotation.x = deg_to_rad(-90)
-
-	# Set decal size (width x depth x height/projection)
-	decal.size = Vector3(track_width, track_length, 1.0)
-
-	# Set texture (use simple albedo modulation)
-	decal.texture_albedo = _create_track_texture()
-	decal.modulate = Color(0.7, 0.7, 0.75, 1.0)
-
-	# Blend mode
-	decal.upper_fade = 0.1
-	decal.lower_fade = 0.1
-
-	# Add to scene
-	add_child(decal)
-
-	# Track for fading
-	active_tracks.append({
-		"decal": decal,
-		"spawn_time": Time.get_ticks_msec() / 1000.0,
-		"position": pos
-	})
-
-	tracks_updated.emit(active_tracks.size())
 
 
 ## Create simple track texture (gradient)
@@ -151,13 +87,19 @@ func _update_tracks(delta: float) -> void:
 			_remove_track(i)
 			# Don't increment i, check same index again
 		else:
-			# Fade track based on age
+			# Fade track based on age (works for both Decal and MeshInstance3D)
 			var fade_progress = age / track_lifetime
-			var decal: Decal = track_data["decal"]
+			var node = track_data["decal"]  # Can be Decal or MeshInstance3D
 
-			# Fade alpha
-			var alpha = 1.0 - fade_progress
-			decal.modulate.a = alpha
+			# Try to fade (works for MeshInstance3D material)
+			if node is MeshInstance3D:
+				var mat = node.material_override as StandardMaterial3D
+				if mat:
+					var alpha = 1.0 - fade_progress
+					mat.albedo_color.a = alpha
+			elif node is Decal:
+				var alpha = 1.0 - fade_progress
+				node.modulate.a = alpha
 
 			i += 1
 
@@ -168,11 +110,11 @@ func _remove_track(index: int) -> void:
 		return
 
 	var track_data = active_tracks[index]
-	var decal: Decal = track_data["decal"]
+	var node = track_data["decal"]  # Can be Decal or MeshInstance3D
 
 	# Remove from scene
-	if decal:
-		decal.queue_free()
+	if node:
+		node.queue_free()
 
 	# Remove from array
 	active_tracks.remove_at(index)
@@ -199,3 +141,41 @@ func get_track_count() -> int:
 ## Set track lifetime
 func set_track_lifetime(seconds: float) -> void:
 	track_lifetime = max(10.0, seconds)  # Minimum 10 seconds
+
+
+## Create track at specific position with custom size (called from player collision detection)
+func create_track_at_position(pos: Vector3, size: Vector3, part_name: String):
+	# Remove oldest track if at limit
+	if active_tracks.size() >= max_tracks:
+		_remove_track(0)
+
+	# Create MeshInstance3D (using debug red box)
+	var mesh_instance = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = Vector3(size.x * 0.5, size.y, size.z)  # Width 50% thinner
+	mesh_instance.mesh = box_mesh
+
+	# Bright red unshaded material
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 0.0, 0.0)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.0, 0.0)
+	material.emission_energy_multiplier = 2.0
+	mesh_instance.material_override = material
+
+	# Position slightly above ground
+	mesh_instance.global_position = pos + Vector3(0, 0.05, 0)
+	mesh_instance.rotation.y = player.rotation.y if player else 0.0
+
+	# Add to scene root (independent of player)
+	get_tree().root.add_child(mesh_instance)
+
+	# Track for fading
+	active_tracks.append({
+		"decal": mesh_instance,
+		"spawn_time": Time.get_ticks_msec() / 1000.0,
+		"position": pos
+	})
+
+	tracks_updated.emit(active_tracks.size())

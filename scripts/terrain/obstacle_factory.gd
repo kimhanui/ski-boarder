@@ -376,9 +376,9 @@ func debug_diagnose() -> void:
 	print("[ObstacleFactory] === DIAGNOSTIC END ===\n")
 
 
-## Find terrain static body
+## Find terrain static body for raycast-based obstacle placement
 func _find_terrain_static() -> StaticBody3D:
-	var terrain_nodes = get_tree().get_nodes_in_group("terrain_static")
+	var terrain_nodes = get_tree().get_nodes_in_group("terrain")
 	if terrain_nodes.size() > 0:
 		return terrain_nodes[0]
 

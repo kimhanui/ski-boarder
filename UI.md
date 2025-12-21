@@ -8,25 +8,88 @@ Complete guide to all user interface systems in the Ski Boarder game.
 
 The game features multiple UI systems for player feedback and game configuration:
 
-1. **HUD (Heads-Up Display)**
+1. **Title Screen**
+   - Game start menu
+   - Blurred semi-transparent background
+   - Options and quit buttons
+
+2. **HUD (Heads-Up Display)**
    - Speed indicator
    - Camera mode label
    - Position/time display
 
-2. **Difficulty Selector**
+3. **Difficulty Selector**
    - Easy/Medium/Hard terrain generation
 
-3. **Density Controls**
+4. **Density Controls**
    - Sparse/Normal/Dense obstacle placement
 
-4. **Minimap**
+5. **Minimap**
    - Top-down view with player position
    - Obstacle indicators
    - Terrain visualization
 
 ---
 
-## 2) Difficulty Selector
+## 2) Title Screen
+
+**File**: `scenes/ui/title_screen.tscn`
+**Script**: `scripts/ui/title_screen.gd`
+
+**Purpose**: Game's main menu screen with semi-transparent blurred background.
+
+### UI Layout
+
+```
+TitleScreen (Control)
+├─ BackgroundGradient (ColorRect) - Dark blue semi-transparent
+├─ BlurOverlay (ColorRect) - Additional blur effect layer
+└─ CenterContainer
+   └─ VBoxContainer
+      ├─ TitleLabel "🏂 Ski Boarder" (72pt)
+      ├─ SubtitleLabel "3D Backcountry Snowboard Game" (24pt)
+      ├─ Spacer (40px)
+      ├─ StartButton "게임 시작" (300x70, 32pt)
+      ├─ OptionsButton "설정" (300x60, 24pt)
+      └─ QuitButton "종료" (300x60, 24pt)
+```
+
+### Features
+
+**Visual Design**:
+- Dual-layer semi-transparent background
+  - BackgroundGradient: `Color(0.05, 0.1, 0.2, 0.85)` - Dark base
+  - BlurOverlay: `Color(0.15, 0.2, 0.35, 0.6)` - Blur effect simulation
+- Clean centered layout
+- Large readable fonts
+- Consistent button sizing
+
+**Button Functions**:
+- **게임 시작**: Loads main game scene (`res://scenes/main.tscn`)
+- **설정**: Opens options menu (TODO: not implemented yet)
+- **종료**: Quits the game
+
+**Interaction**:
+```gdscript
+func _on_start_button_pressed() -> void:
+    get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+func _on_quit_button_pressed() -> void:
+    get_tree().quit()
+```
+
+### Project Settings
+
+**Startup Scene**: `project.godot`
+```ini
+run/main_scene="res://scenes/ui/title_screen.tscn"
+```
+
+The game now starts with the title screen instead of directly loading the main scene.
+
+---
+
+## 3) Difficulty Selector
 
 **File**: `scenes/ui/difficulty_selector.tscn`
 **Script**: Connected to terrain generation system
@@ -64,7 +127,7 @@ func _on_difficulty_selected(difficulty: String):
 
 ---
 
-## 3) Obstacle Density Controls
+## 4) Obstacle Density Controls
 
 **File**: `scripts/ui/density_controls.gd`
 **Class**: `DensityControls` (extends VBoxContainer)
@@ -196,7 +259,7 @@ _update_status_label() updates UI
 
 ---
 
-## 4) Minimap System
+## 5) Minimap System
 
 **File**: `scripts/ui/minimap.gd`
 **Class**: `Minimap` (extends Control)
@@ -262,7 +325,7 @@ minimap.minimap_zoom_changed.connect(_on_zoom_changed)
 
 ---
 
-## 5) HUD (Heads-Up Display)
+## 6) HUD (Heads-Up Display)
 
 **Location**: Player scene UI layer (`scenes/player/player.tscn`)
 
@@ -288,7 +351,7 @@ $UI/CameraModeLabel.text = "카메라: " + camera_mode_names[current_mode]
 
 ---
 
-## 6) Scene Hierarchy Example
+## 7) Scene Hierarchy Example
 
 ```
 Main.tscn (Node3D)
@@ -316,7 +379,7 @@ Main.tscn (Node3D)
 
 ---
 
-## 7) Styling & Theme
+## 8) Styling & Theme
 
 ### Color Palette
 
@@ -341,7 +404,7 @@ Main.tscn (Node3D)
 
 ---
 
-## 8) Input Handling
+## 9) Input Handling
 
 ### Camera Toggle
 **Key**: F1 (or `toggle_camera` action)
@@ -353,7 +416,7 @@ Main.tscn (Node3D)
 
 ---
 
-## 9) Performance Considerations
+## 10) Performance Considerations
 
 **Minimap Optimization**:
 - SubViewport renders at full resolution (180×180)

@@ -76,6 +76,7 @@ text = "게임 시작"
 custom_minimum_size = Vector2(300, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
+disabled = true
 text = "설정"
 
 [node name="QuitButton" type="Button" parent="CenterContainer/VBoxContainer"]

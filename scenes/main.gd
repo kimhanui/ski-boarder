@@ -19,6 +19,11 @@ func _ready() -> void:
 	# Force DirectionalLight3D shadow settings (prevent Godot editor from removing them)
 	_enforce_shadow_settings()
 
+	# Connect Test Mode Manager signal
+	TestModeManager.test_mode_changed.connect(_on_test_mode_changed)
+	# Apply initial test mode state
+	_on_test_mode_changed(TestModeManager.test_mode_enabled)
+
 	# Connect UI signals
 	if difficulty_selector:
 		difficulty_selector.difficulty_changed.connect(_on_difficulty_changed)
@@ -188,3 +193,25 @@ func _update_camera_target() -> void:
 		if free_camera.has_method("set_target"):
 			free_camera.set_target(null)  # Fallback to group lookup
 			print("[Main] Camera following real player")
+
+
+## Handle test mode toggle from TestModeManager
+func _on_test_mode_changed(enabled: bool) -> void:
+	print("[Main] Test mode changed: %s" % ("ON" if enabled else "OFF"))
+
+	# Show/hide debug UI elements
+	# Minimap is ALWAYS visible (not affected by test mode)
+	if trick_mode_button:
+		trick_mode_button.visible = enabled
+
+	if light_control:
+		light_control.visible = enabled
+
+	if difficulty_selector:
+		difficulty_selector.visible = enabled
+
+	if density_controls:
+		density_controls.visible = enabled
+
+	# Note: Functionality remains active even when UI is hidden
+	# Keyboard shortcuts still work (e.g., L for terrain toggle)

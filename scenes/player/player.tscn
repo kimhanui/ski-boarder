@@ -1,8 +1,9 @@
-[gd_scene load_steps=16 format=3 uid="uid://c6xj3q8pxr7kv"]
+[gd_scene load_steps=17 format=3 uid="uid://c6xj3q8pxr7kv"]
 
 [ext_resource type="Script" path="res://scripts/player/player_v3.gd" id="1_player_script"]
 [ext_resource type="Script" uid="uid://h6abmo04w0o8" path="res://scripts/camera/free_camera.gd" id="2_free_camera_script"]
 [ext_resource type="Script" uid="uid://dmerbx0ekj66e" path="res://scripts/player/ski_tracks.gd" id="3_ski_tracks"]
+[ext_resource type="Script" path="res://scripts/player/player_customization.gd" id="4_player_customization"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 height = 2.19
@@ -207,3 +208,6 @@ visible = false
 [node name="SkiTracks" type="Node3D" parent="."]
 script = ExtResource("3_ski_tracks")
 player = NodePath("..")
+
+[node name="PlayerCustomization" type="Node" parent="."]
+script = ExtResource("4_player_customization")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://bqyxsn7hxvf7h"]
+[gd_scene load_steps=13 format=3 uid="uid://bqyxsn7hxvf7h"]
 
 [ext_resource type="Script" uid="uid://cn342iexxqcl4" path="res://scenes/main.gd" id="1_main_script"]
 [ext_resource type="PackedScene" uid="uid://b7j8lam3n4p5q" path="res://scenes/environment/procedural_slope.tscn" id="1_procedural_slope"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://bb5gwfvikxmqg" path="res://scripts/ui/minimap.gd" id="5_minimap"]
 [ext_resource type="Script" uid="uid://by0ffl8q2xtoe" path="res://scripts/ui/density_controls.gd" id="6_density_controls"]
 [ext_resource type="PackedScene" path="res://scenes/ui/light_control.tscn" id="7_light_control"]
+[ext_resource type="PackedScene" uid="uid://bx7h3m2k8n4yp" path="res://scenes/ui/wardrobe_screen.tscn" id="8_wardrobe"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -37,7 +38,7 @@ directional_shadow_max_distance = 3000.0
 
 [node name="ProceduralSlope" parent="." instance=ExtResource("1_procedural_slope")]
 
-[node name="Player" parent="." instance=ExtResource("2_player")]
+[node name="Player" parent="." groups=["player"] instance=ExtResource("2_player")]
 transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 350.2, 0)
 
 [node name="FreeCamera" type="Camera3D" parent="."]
@@ -69,3 +70,5 @@ toggle_mode = true
 text = "트릭 모드: OFF"
 
 [node name="LightControl" parent="UI" instance=ExtResource("7_light_control")]
+
+[node name="WardrobeScreen" parent="." instance=ExtResource("8_wardrobe")]

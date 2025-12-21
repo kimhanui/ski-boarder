@@ -618,19 +618,25 @@ func _apply_velocity(delta: float) -> void:
 
 func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_input: float, delta: float) -> void:
 	# Lean system
+	var target_leg_bend = 0.0  # Target knee bending angle
+
 	if is_braking:
 		target_lean = -20.0
 		target_upper_lean = -10.0
+		target_leg_bend = -15.0  # Slight knee bend while braking
 	elif is_moving_forward:
 		target_lean = 0.0
 		target_upper_lean = -45.0
+		target_leg_bend = -25.0  # Proper ski stance - knees bent
 		_update_arm_swing(delta)
 	elif current_speed > SKATING_SPEED_THRESHOLD:
 		target_lean = 0.0
 		target_upper_lean = -45.0
+		target_leg_bend = -25.0  # Knees bent while skating
 	else:
 		target_lean = 0.0
 		target_upper_lean = -15.0
+		target_leg_bend = 0.0  # Straight legs when idle
 
 	# Always update breathing
 	_update_breathing_cycle(delta)
@@ -646,6 +652,11 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		body.rotation_degrees.x = current_lean
 
 	torso.rotation_degrees.x = current_upper_lean
+
+	# Apply leg bending (knee bend for ski stance)
+	if left_leg and right_leg:
+		left_leg.rotation_degrees.x = lerp(left_leg.rotation_degrees.x, target_leg_bend, ANIMATION_SPEED * delta)
+		right_leg.rotation_degrees.x = lerp(right_leg.rotation_degrees.x, target_leg_bend, ANIMATION_SPEED * delta)
 
 	# Ski stance
 	_update_ski_stance(is_braking, delta)

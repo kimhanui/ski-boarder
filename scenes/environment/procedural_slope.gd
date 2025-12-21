@@ -357,10 +357,46 @@ func _update_test_objects_position() -> void:
 	print("[ProceduralSlope] Test objects repositioned to Y=%.1f (ground=%.1f + 10m)" % [ground_y + hover_height, ground_y])
 
 
-## Toggle terrain version (disabled - only V2 available for shadow test mode)
+## Toggle between V1 (Procedural) and V2 (Flat) terrain
 func toggle_terrain_version() -> void:
-	# Terrain toggle disabled - only V1 (normal) and V2 (shadow test) available
-	print("[ProceduralSlope] Terrain toggle disabled - only V1/V2 versions exist")
+	# V1 ↔ V2 토글
+	terrain_version = 0 if terrain_version == 1 else 1
+
+	var version_names = {0: "V1 (Procedural)", 1: "V2 (Flat)"}
+	print("\n" + "=".repeat(60))
+	print("TOGGLING TERRAIN VERSION")
+	print("  New version: %s" % version_names.get(terrain_version, "Unknown"))
+	print("=".repeat(60) + "\n")
+
+	# 지형 가시성 전환
+	_show_active_terrain()
+
+	# 플레이어를 새 지형 시작 위치로 이동
+	_move_player_to_terrain_start()
+
+
+## Move player to active terrain's start position
+func _move_player_to_terrain_start() -> void:
+	var player = get_parent().get_node_or_null("Player")
+	if not player:
+		print("[ProceduralSlope] Player not found")
+		return
+
+	# 새 지형의 시작 위치 계산
+	var start_pos: Vector3
+	if terrain_version == 1:
+		# V2 (Flat): Y=5m (평지 위 5m)
+		start_pos = Vector3(0.0, 5.0, -30.0)
+	else:
+		# V1 (Procedural): difficulty에 따른 시작 위치
+		start_pos = _get_terrain_start_position()
+
+	# 플레이어 이동 및 속도 초기화
+	player.global_position = start_pos
+	if player.has_method("reset_velocity"):
+		player.reset_velocity()
+
+	print("[ProceduralSlope] Player moved to: %s" % start_pos)
 
 
 ## Create test obstacles for shadow testing (near player spawn, all terrains)

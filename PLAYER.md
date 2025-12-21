@@ -808,6 +808,35 @@ if is_airborne and Input.is_action_pressed("move_back"):
 
 ---
 
+## Trick System
+
+**버전**: V3
+**파일**: `scripts/player/player_v3.gd` (트릭 로직), `scripts/ui/trick_score_display.gd` (UI)
+**상세 문서**: [TRICKS.md](./TRICKS.md)
+
+### Quick Overview
+
+**구현된 트릭**:
+- **Backflip** (S) - 뒤로 회전 (360°/720°/1080°)
+- **Frontflip** (W) - 앞으로 회전 (360°/720°/1080°)
+- **Tail Grab** (Shift) - 스키 테일 잡기 (콤보 가능)
+
+**트릭 모드**: T 키로 토글 (활성화 시에만 JUMP → FLIP 전환 가능)
+
+**점수 시스템**:
+- 360° = 100점, 720° = 250점, 1080° = 450점
+- Perfect Landing (±10°) = +50점 보너스
+- Good Landing (±30°) = 점수 인정
+
+**주요 기능**:
+- Flip과 Grab 동시 수행 가능 (콤보: "Backflip + Tail Grab")
+- 실시간 회전각 및 점수 UI 표시
+- 착지 정확도 기반 점수 계산
+
+**상세 내용**: 트릭 추가 방법, 아키텍처, 포즈 설계, UI 연동 등은 [TRICKS.md](./TRICKS.md) 참조
+
+---
+
 ## Player V3: State Machine (FSM)
 
 **버전**: V3

@@ -91,6 +91,12 @@ ski-boarder/
   - 미니맵 (플레이어 위치, 장애물 표시)
   - HUD (속도, 카메라 모드)
 
+- **[TRICKS.md](./TRICKS.md)** - 트릭 시스템 가이드
+  - 구현된 트릭 목록 (Backflip, Frontflip, Tail Grab)
+  - 트릭 시스템 아키텍처 (상태 머신, 입력, 점수)
+  - 새로운 트릭 추가 Step-by-Step 가이드
+  - UI 연동 및 점수 시스템
+
 ### 설정 및 참고
 - **[PROJECT_SETUP.md](./PROJECT_SETUP.md)** - 프로젝트 초기 설정
 - **[CLAUDE.md](./CLAUDE.md)** - Claude Code 작업 가이드

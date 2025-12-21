@@ -1347,19 +1347,20 @@ func _add_collision_area_to_part(part: Node3D, part_name: String):
 	collision_shape.shape = shape
 	area.add_child(collision_shape)
 
-	# DEBUG: Visualize collision box with red mesh
-	var debug_mesh = MeshInstance3D.new()
-	var box_mesh = BoxMesh.new()
-	box_mesh.size = mesh_size
-	debug_mesh.mesh = box_mesh
+	# DEBUG: Visualize collision box with red mesh (only in test mode)
+	if TestModeManager.test_mode_enabled:
+		var debug_mesh = MeshInstance3D.new()
+		var box_mesh = BoxMesh.new()
+		box_mesh.size = mesh_size
+		debug_mesh.mesh = box_mesh
 
-	var debug_material = StandardMaterial3D.new()
-	debug_material.albedo_color = Color(1.0, 0.0, 0.0, 0.3)  # Red, semi-transparent
-	debug_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	debug_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides
-	debug_mesh.material_override = debug_material
+		var debug_material = StandardMaterial3D.new()
+		debug_material.albedo_color = Color(1.0, 0.0, 0.0, 0.3)  # Red, semi-transparent
+		debug_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		debug_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Show both sides
+		debug_mesh.material_override = debug_material
 
-	area.add_child(debug_mesh)
+		area.add_child(debug_mesh)
 
 	# Connect signals
 	area.body_entered.connect(_on_body_part_touched_ground.bind(part, part_name))

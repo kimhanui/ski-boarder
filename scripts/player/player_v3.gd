@@ -117,6 +117,9 @@ var trick_in_progress: bool = false
 var trick_score: int = 0
 var total_score: int = 0
 
+# Tail Grab system
+var tail_grab_intensity: float = 0.0  # 0.0~1.0 (pose strength)
+
 # Carving state
 var steer_yaw: float = 0.0
 var velocity_heading: float = 0.0
@@ -303,11 +306,17 @@ func _reset_body_pose() -> void:
 	trick_rotation_x_total = 0.0
 	trick_flip_speed = 0.0
 	trick_in_progress = false
+	tail_grab_intensity = 0.0  # Reset Tail Grab
 
 	# Reset animation variables
 	current_tilt = 0.0
 	current_lean = 0.0
 	current_upper_lean = 0.0
+
+	# Reset arms (Tail Grab 포즈 해제)
+	if left_arm and right_arm:
+		left_arm.rotation = Vector3.ZERO
+		right_arm.rotation = Vector3.ZERO
 
 
 ## Update UI state label
@@ -439,8 +448,8 @@ func _process_jump(delta: float) -> void:
 
 	# Detect trick inputs (only if trick mode enabled)
 	if trick_mode_enabled and _get_height_above_ground() >= MIN_TRICK_HEIGHT:
-		if Input.is_action_pressed("move_back") or Input.is_action_pressed("move_forward"):
-			# Trick started - transition to FLIP
+		if Input.is_action_pressed("move_back") or Input.is_action_pressed("move_forward") or Input.is_key_pressed(KEY_SHIFT):
+			# Trick started - transition to FLIP (including Tail Grab)
 			set_state(PlayerState.FLIP)
 			return
 
@@ -654,7 +663,22 @@ func _detect_trick_inputs() -> void:
 
 	var delta = get_physics_process_delta_time()
 
-	# W/S → Flip tricks
+	# Shift → Tail Grab (레이어로 작동 - 어떤 트릭 위에도 얹을 수 있음)
+	if Input.is_key_pressed(KEY_SHIFT):
+		tail_grab_intensity = lerp(tail_grab_intensity, 1.0, 0.15)
+		if not trick_in_progress:
+			# Tail Grab만 단독 실행
+			trick_in_progress = true
+			current_trick = "Tail Grab"
+			print("[Trick] Starting Tail Grab!")
+		elif not current_trick.contains("Tail Grab"):
+			# 이미 다른 트릭 중 + Shift 누름 = 콤보
+			current_trick = current_trick + " + Tail Grab"
+			print("[Trick] Combo: %s!" % current_trick)
+	else:
+		tail_grab_intensity = lerp(tail_grab_intensity, 0.0, 0.15)
+
+	# W/S → Flip tricks (간소화: 콤보 로직 제거, 위에서 통합 처리)
 	if Input.is_action_pressed("move_back"):
 		# Backflip
 		trick_flip_speed = -FLIP_ROTATION_SPEED
@@ -681,6 +705,10 @@ func _detect_trick_inputs() -> void:
 	# Apply to body
 	_apply_air_trick_rotations()
 
+	# Apply Tail Grab pose (독립적으로 적용)
+	if tail_grab_intensity > 0.01:
+		_apply_tail_grab_pose(tail_grab_intensity)
+
 
 ## Apply air trick rotations to body
 ## Note: Head는 Body의 자식이므로 자동으로 회전을 상속받음
@@ -695,6 +723,49 @@ func _apply_air_trick_rotations() -> void:
 	# head.position.z를 수정하지 않음 (이전 버그: flip 시 머리가 떨어져 나감)
 	if head:
 		head.rotation = Vector3.ZERO  # 착지 후 리셋용
+
+
+## Apply Tail Grab pose to body parts
+## intensity: 0.0~1.0 (pose strength, lerped for smooth transitions)
+## Note: 이 함수는 Body 회전과 독립적으로 작동 (Torso, Arms, Legs만 조작)
+## Body 회전(Backflip/Frontflip)과 동시 사용 가능
+func _apply_tail_grab_pose(intensity: float) -> void:
+	if not right_arm or not left_arm or not right_leg or not left_leg or not torso:
+		return
+
+	# Smooth interpolation factor (부드러운 전환)
+	var lerp_factor = 0.2
+
+	# === 오른팔: 뒤로 뻗어 오른쪽 스키 테일 잡기 ===
+	# X축: 팔을 뒤로 -120도 (스키 테일 방향)
+	# Y축: 약간 안쪽으로 -30도 (몸 쪽으로)
+	var target_right_arm_x = -120.0 * intensity
+	var target_right_arm_y = -30.0 * intensity
+	right_arm.rotation_degrees.x = lerp(right_arm.rotation_degrees.x, target_right_arm_x, lerp_factor)
+	right_arm.rotation_degrees.y = lerp(right_arm.rotation_degrees.y, target_right_arm_y, lerp_factor)
+
+	# === 왼팔: 균형 잡기 위해 위/옆으로 ===
+	# X축: 위로 45도
+	# Z축: 옆으로 30도
+	var target_left_arm_x = 45.0 * intensity
+	var target_left_arm_z = 30.0 * intensity
+	left_arm.rotation_degrees.x = lerp(left_arm.rotation_degrees.x, target_left_arm_x, lerp_factor)
+	left_arm.rotation_degrees.z = lerp(left_arm.rotation_degrees.z, target_left_arm_z, lerp_factor)
+
+	# === 다리: 무릎 강하게 굽히기 (콤팩트 포즈) ===
+	# X축: -70도 (무릎을 몸 쪽으로)
+	var target_leg_x = -70.0 * intensity
+	right_leg.rotation_degrees.x = lerp(right_leg.rotation_degrees.x, target_leg_x, lerp_factor)
+	left_leg.rotation_degrees.x = lerp(left_leg.rotation_degrees.x, target_leg_x, lerp_factor)
+
+	# === 상체: 스키 쪽으로 숙이기 ===
+	# X축: 앞으로 35도
+	var target_torso_x = 35.0 * intensity
+	torso.rotation_degrees.x = lerp(torso.rotation_degrees.x, target_torso_x, lerp_factor)
+
+	# 디버그 출력 (intensity가 변할 때만)
+	if abs(intensity - tail_grab_intensity) > 0.05:
+		print("[Tail Grab] Pose intensity: %.2f" % intensity)
 
 
 ## Helper functions (from v2)
@@ -1202,6 +1273,12 @@ func _on_body_part_left_ground(body: Node, part_name: String):
 		print("[충돌종료] part_name: ", part_name, " | Remaining: ", touching_parts.keys())
 
 func _create_tracks_for_touching_parts():
+	# Only create tracks when player is moving
+	const MIN_TRACK_SPEED = 0.5  # m/s (prevent tracks when stationary)
+
+	if current_speed < MIN_TRACK_SPEED:
+		return  # Not moving, don't create tracks
+
 	for part_name in touching_parts:
 		var part = touching_parts[part_name]
 		var mesh_size = _get_mesh_size(part)

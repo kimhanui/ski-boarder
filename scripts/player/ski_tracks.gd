@@ -7,7 +7,7 @@ class_name SkiTracks
 signal tracks_updated(track_count: int)
 
 @export var player: CharacterBody3D  # Reference to player
-@export var max_tracks := 500  # Maximum number of track decals
+@export var max_tracks := 30  # Maximum number of track decals (FIFO)
 @export var track_lifetime := 30.0  # Fade time (seconds)
 @export var track_width := 2.0  # Width of ski track (enlarged for testing)
 @export var track_length := 5.0  # Length of ski track (enlarged for testing)

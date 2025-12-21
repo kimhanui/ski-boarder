@@ -767,9 +767,9 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	var lerp_factor = 0.2
 
 	# === 오른팔: 뒤로 뻗어 오른쪽 스키 테일 잡기 ===
-	# X축: 팔을 뒤로 -120도 (스키 테일 방향)
+	# X축: 팔을 뒤로 -140도 (스키 테일에 닿을 정도)
 	# Y축: 약간 안쪽으로 -30도 (몸 쪽으로)
-	var target_right_arm_x = -120.0 * intensity
+	var target_right_arm_x = -140.0 * intensity
 	var target_right_arm_y = -30.0 * intensity
 	right_arm.rotation_degrees.x = lerp(right_arm.rotation_degrees.x, target_right_arm_x, lerp_factor)
 	right_arm.rotation_degrees.y = lerp(right_arm.rotation_degrees.y, target_right_arm_y, lerp_factor)
@@ -784,19 +784,19 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 
 	# === 다리: 무릎 강하게 굽히기 (콤팩트 포즈) ===
 	# 분리된 무릎 관절: 허벅지 + 종아리 (반대 방향 회전)
-	# 허벅지 (UpperLeg): 고관절 기준 +40도 (뒤로, OPPOSITE direction)
-	var target_upper_leg_x = 40.0 * intensity  # Positive = backward
+	# 허벅지 (UpperLeg): 고관절 기준 +60도 (뒤로, 스키 테일 방향)
+	var target_upper_leg_x = 60.0 * intensity  # Positive = backward
 	right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 	left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 
-	# 종아리 (LowerLeg): 무릎 관절 기준 -90도 (앞으로, 강한 굽힘)
-	var target_lower_leg_x = -90.0 * intensity  # Negative = forward
+	# 종아리 (LowerLeg): 무릎 관절 기준 -110도 (앞으로, 더 강한 굽힘)
+	var target_lower_leg_x = -110.0 * intensity  # Negative = forward
 	right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 	left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 
-	# === 상체: 스키 쪽으로 숙이기 ===
-	# X축: 앞으로 35도
-	var target_torso_x = 35.0 * intensity
+	# === 상체: 뒤로 아치형 벤딩 ===
+	# X축: 뒤로 -50도 (역동적인 아치, 스키 테일 방향으로 휨)
+	var target_torso_x = -50.0 * intensity
 	torso.rotation_degrees.x = lerp(torso.rotation_degrees.x, target_torso_x, lerp_factor)
 
 	# 디버그 출력 (intensity가 변할 때만)

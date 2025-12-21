@@ -63,6 +63,10 @@ const STEER_YAW_DAMPING = 0.92
 @onready var right_arm = $Body/RightArm
 @onready var left_leg = $Body/LeftLeg
 @onready var right_leg = $Body/RightLeg
+@onready var left_upper_leg = $Body/LeftLeg/UpperLeg
+@onready var left_lower_leg = $Body/LeftLeg/LowerLeg
+@onready var right_upper_leg = $Body/RightLeg/UpperLeg
+@onready var right_lower_leg = $Body/RightLeg/LowerLeg
 @onready var left_ski = $Body/LeftLeg/Ski
 @onready var right_ski = $Body/RightLeg/Ski
 @onready var left_eye = $Body/Head/LeftEye
@@ -288,6 +292,13 @@ func _reset_body_pose() -> void:
 		right_leg.rotation_degrees.z = 0.0
 		left_leg.position.x = -0.15
 		right_leg.position.x = 0.15
+
+	# Upper/Lower leg reset (knee joints)
+	if left_upper_leg and left_lower_leg and right_upper_leg and right_lower_leg:
+		left_upper_leg.rotation_degrees.x = 0.0
+		right_upper_leg.rotation_degrees.x = 0.0
+		left_lower_leg.rotation_degrees.x = 0.0
+		right_lower_leg.rotation_degrees.x = 0.0
 
 	# Skis reset
 	if left_ski and right_ski:
@@ -654,9 +665,17 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 	torso.rotation_degrees.x = current_upper_lean
 
 	# Apply leg bending (knee bend for ski stance)
-	if left_leg and right_leg:
-		left_leg.rotation_degrees.x = lerp(left_leg.rotation_degrees.x, target_leg_bend, ANIMATION_SPEED * delta)
-		right_leg.rotation_degrees.x = lerp(right_leg.rotation_degrees.x, target_leg_bend, ANIMATION_SPEED * delta)
+	# Split knee joint: upper leg (thigh) + lower leg (calf) for realistic bending
+	if left_upper_leg and left_lower_leg and right_upper_leg and right_lower_leg:
+		# Upper leg (thigh): hip joint bending
+		var target_upper_leg = target_leg_bend * 0.6  # 60% of total bend at hip
+		left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg, ANIMATION_SPEED * delta)
+		right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg, ANIMATION_SPEED * delta)
+
+		# Lower leg (calf): knee joint bending (opposite direction for natural fold)
+		var target_lower_leg = target_leg_bend * 1.0  # 100% at knee for sharper bend
+		left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg, ANIMATION_SPEED * delta)
+		right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg, ANIMATION_SPEED * delta)
 
 	# Ski stance
 	_update_ski_stance(is_braking, delta)
@@ -764,10 +783,16 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	left_arm.rotation_degrees.z = lerp(left_arm.rotation_degrees.z, target_left_arm_z, lerp_factor)
 
 	# === 다리: 무릎 강하게 굽히기 (콤팩트 포즈) ===
-	# X축: -70도 (무릎을 몸 쪽으로)
-	var target_leg_x = -70.0 * intensity
-	right_leg.rotation_degrees.x = lerp(right_leg.rotation_degrees.x, target_leg_x, lerp_factor)
-	left_leg.rotation_degrees.x = lerp(left_leg.rotation_degrees.x, target_leg_x, lerp_factor)
+	# 분리된 무릎 관절: 허벅지 + 종아리
+	# 허벅지 (UpperLeg): 고관절 기준 -40도
+	var target_upper_leg_x = -40.0 * intensity
+	right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
+	left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
+
+	# 종아리 (LowerLeg): 무릎 관절 기준 -90도 (강한 굽힘)
+	var target_lower_leg_x = -90.0 * intensity
+	right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
+	left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 
 	# === 상체: 스키 쪽으로 숙이기 ===
 	# X축: 앞으로 35도

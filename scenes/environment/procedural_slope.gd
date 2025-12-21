@@ -8,16 +8,15 @@ extends Node3D
 ## Random seed for procedural generation. Use -1 for random seed each time.
 @export var random_seed: int = -1
 
-## Terrain version: 0=V1 (Procedural), 1=V2 (Flat), 2=V3 (Bumpy)
-@export_enum("V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)") var terrain_version: int = 0
+## Terrain version: 0=V1 (Procedural), 1=V2 (Flat)
+@export_enum("V1 (Procedural)", "V2 (Flat)") var terrain_version: int = 0
 
 ## Optional JSON file path. If difficulty is set, this is ignored and terrain is generated procedurally.
 @export var slope_data_path: String = "res://resources/slope_data.json"
 
-# Store all 3 terrain versions (keep them all, just toggle visibility)
+# Store both terrain versions (keep them all, just toggle visibility)
 var _terrain_v1: Node3D = null
 var _terrain_v2: Node3D = null
-var _terrain_v3: Node3D = null
 
 # Shadow test mode (V2/V3 with dummies) vs normal mode (V1 with real player)
 var shadow_test_mode: bool = false
@@ -71,7 +70,7 @@ func _load_and_build_terrain() -> void:
 			push_error("Slope data is not a valid dictionary")
 			return
 
-	# Generate all 3 terrains if they don't exist (only once)
+	# Generate both terrains if they don't exist (only once)
 	if not _terrain_v1:
 		print("=== Generating V1 (Procedural) Terrain ===")
 		_terrain_v1 = TerrainGenerator.apply_slope_data(data, difficulty, random_seed)
@@ -86,13 +85,6 @@ func _load_and_build_terrain() -> void:
 		add_child(_terrain_v2)
 		print("V2 terrain created")
 
-	if not _terrain_v3:
-		print("=== Generating V3 (Bumpy) Terrain ===")
-		_terrain_v3 = TerrainGeneratorV3.create_bumpy_terrain()
-		_terrain_v3.name = "TerrainV3"
-		add_child(_terrain_v3)
-		print("V3 terrain created")
-
 	# Show only the current terrain version
 	_show_active_terrain()
 
@@ -101,7 +93,7 @@ func _load_and_build_terrain() -> void:
 
 	print("=" .repeat(60))
 	print("TERRAIN SETUP COMPLETE")
-	var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
+	var version_names = ["V1 (Procedural)", "V2 (Flat)"]
 	print("  Active version: %s" % version_names[terrain_version])
 	print("  Mode: %s" % ("Shadow Test" if shadow_test_mode else "Normal"))
 	print("=" .repeat(60))
@@ -169,20 +161,15 @@ func _show_active_terrain() -> void:
 			_terrain_v1.visible = true
 		if _terrain_v2:
 			_terrain_v2.visible = false
-		if _terrain_v3:
-			_terrain_v3.visible = false
 		print("[ProceduralSlope] Normal mode: V1 active")
 	else:
-		# Shadow test mode: V2/V3만 토글
+		# Shadow test mode: V2만 표시
 		if _terrain_v1:
 			_terrain_v1.visible = false
 		if _terrain_v2:
 			_terrain_v2.visible = (terrain_version == 1)
-		if _terrain_v3:
-			_terrain_v3.visible = (terrain_version == 2)
 
-		var version_names = {1: "V2", 2: "V3"}
-		print("[ProceduralSlope] Test mode: %s active" % version_names.get(terrain_version, "Unknown"))
+		print("[ProceduralSlope] Test mode: V2 active")
 
 
 ## Get terrain start position (consistent across V1/V2/V3)
@@ -231,8 +218,6 @@ func set_shadow_test_mode(enabled: bool) -> void:
 func _get_active_terrain() -> Node3D:
 	if terrain_version == 1:
 		return _terrain_v2
-	elif terrain_version == 2:
-		return _terrain_v3
 	return _terrain_v1
 
 
@@ -241,7 +226,7 @@ func _get_terrain_ground_y(x: float, z: float) -> float:
 	if terrain_version == 1:
 		return 0.0  # V2: Flat terrain at Y=0
 	else:
-		# V1/V3: Raycast to find ground
+		# V1: Raycast to find ground
 		var space_state = get_world_3d().direct_space_state
 		var query = PhysicsRayQueryParameters3D.create(
 			Vector3(x, 100, z),
@@ -372,25 +357,10 @@ func _update_test_objects_position() -> void:
 	print("[ProceduralSlope] Test objects repositioned to Y=%.1f (ground=%.1f + 10m)" % [ground_y + hover_height, ground_y])
 
 
-## Toggle between V2 (flat) and V3 (bumpy) terrain (shadow test mode only)
+## Toggle terrain version (disabled - only V2 available for shadow test mode)
 func toggle_terrain_version() -> void:
-	# 테스트 모드에서만 V2 ↔ V3 토글
-	if shadow_test_mode:
-		terrain_version = 1 if terrain_version == 2 else 2
-
-		var version_names = {1: "V2 (Flat)", 2: "V3 (Bumpy)"}
-		print("\n" + "=".repeat(60))
-		print("TOGGLING TERRAIN VERSION (Test Mode)")
-		print("  New version: %s" % version_names.get(terrain_version, "Unknown"))
-		print("=".repeat(60) + "\n")
-
-		# Toggle visibility
-		_show_active_terrain()
-
-		# 테스트 객체들을 새 지형 높이에 맞춰 이동
-		_update_test_objects_position()
-	else:
-		print("[ProceduralSlope] Terrain toggle disabled in normal mode (use shadow test mode button)")
+	# Terrain toggle disabled - only V1 (normal) and V2 (shadow test) available
+	print("[ProceduralSlope] Terrain toggle disabled - only V1/V2 versions exist")
 
 
 ## Create test obstacles for shadow testing (near player spawn, all terrains)
@@ -420,7 +390,7 @@ func _create_test_obstacles() -> void:
 		if terrain_version == 1:
 			return 0.0  # V2: Flat terrain
 		else:
-			# V1 and V3: Raycast to find ground
+			# V1: Raycast to find ground
 			var space_state = get_world_3d().direct_space_state
 			var query = PhysicsRayQueryParameters3D.create(
 				Vector3(x, player_pos.y + 10, z),
@@ -491,7 +461,7 @@ func _create_player_clone_for_testing() -> void:
 		ground_y = 0.0
 		clone_y_position = 1.0 + PLAYER_BOTTOM_OFFSET
 	else:
-		# V1 and V3: Use raycast to find ground, then add 100cm + player offset
+		# V1: Use raycast to find ground, then add 100cm + player offset
 		var space_state = get_world_3d().direct_space_state
 		var query = PhysicsRayQueryParameters3D.create(
 			Vector3(player_pos.x, player_pos.y + 10, player_pos.z),

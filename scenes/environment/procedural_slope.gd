@@ -14,7 +14,17 @@ extends Node3D
 ## Optional JSON file path. If difficulty is set, this is ignored and terrain is generated procedurally.
 @export var slope_data_path: String = "res://resources/slope_data.json"
 
-var _current_terrain_root: Node3D = null
+# Store all 3 terrain versions (keep them all, just toggle visibility)
+var _terrain_v1: Node3D = null
+var _terrain_v2: Node3D = null
+var _terrain_v3: Node3D = null
+
+# Shadow test mode (V2/V3 with dummies) vs normal mode (V1 with real player)
+var shadow_test_mode: bool = false
+
+# Test mode objects (created/destroyed on mode toggle)
+var _test_dummy_player: CharacterBody3D = null
+var _test_obstacles: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -61,48 +71,39 @@ func _load_and_build_terrain() -> void:
 			push_error("Slope data is not a valid dictionary")
 			return
 
-	# Generate terrain using appropriate generator
-	print("=" .repeat(60))
-	print("TERRAIN GENERATION START")
-	var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
-	print("  Version: %s" % version_names[terrain_version])
-	print("  Difficulty: %s" % (difficulty if not difficulty.is_empty() else "JSON-based"))
-	print("  Random Seed: %d" % random_seed)
-	print("=" .repeat(60))
+	# Generate all 3 terrains if they don't exist (only once)
+	if not _terrain_v1:
+		print("=== Generating V1 (Procedural) Terrain ===")
+		_terrain_v1 = TerrainGenerator.apply_slope_data(data, difficulty, random_seed)
+		_terrain_v1.name = "TerrainV1"
+		add_child(_terrain_v1)
+		print("V1 terrain created")
 
-	var terrain_root: Node3D
-	match terrain_version:
-		0:  # V1: Procedural slope terrain
-			print("Using TerrainGenerator (procedural terrain)")
-			terrain_root = TerrainGenerator.apply_slope_data(data, difficulty, random_seed)
-		1:  # V2: Flat terrain
-			print("Using TerrainGeneratorV2 (flat terrain)")
-			terrain_root = TerrainGeneratorV2.create_flat_terrain()
-		2:  # V3: Bumpy terrain
-			print("Using TerrainGeneratorV3 (bumpy terrain)")
-			terrain_root = TerrainGeneratorV3.create_bumpy_terrain()
-		_:
-			print("ERROR: Invalid terrain_version: %d" % terrain_version)
-			terrain_root = TerrainGenerator.apply_slope_data(data, difficulty, random_seed)
+	if not _terrain_v2:
+		print("=== Generating V2 (Flat) Terrain ===")
+		_terrain_v2 = TerrainGeneratorV2.create_flat_terrain()
+		_terrain_v2.name = "TerrainV2"
+		add_child(_terrain_v2)
+		print("V2 terrain created")
 
-	# Store reference to current terrain
-	if _current_terrain_root:
-		_current_terrain_root.queue_free()
-	_current_terrain_root = terrain_root
-	add_child(terrain_root)
+	if not _terrain_v3:
+		print("=== Generating V3 (Bumpy) Terrain ===")
+		_terrain_v3 = TerrainGeneratorV3.create_bumpy_terrain()
+		_terrain_v3.name = "TerrainV3"
+		add_child(_terrain_v3)
+		print("V3 terrain created")
 
-	# Auto-position player at start point
+	# Show only the current terrain version
+	_show_active_terrain()
+
+	# Position player at start point of active terrain
 	_position_player_at_start(data, difficulty)
 
-	# Create test obstacles for debugging (V2 only)
-	_create_test_obstacles()
-
-	# Create player clone for shadow testing
-	_create_player_clone_for_testing()
-
 	print("=" .repeat(60))
-	print("TERRAIN GENERATION COMPLETE")
-	print("  Metadata: ", data.get("meta", {}))
+	print("TERRAIN SETUP COMPLETE")
+	var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
+	print("  Active version: %s" % version_names[terrain_version])
+	print("  Mode: %s" % ("Shadow Test" if shadow_test_mode else "Normal"))
 	print("=" .repeat(60))
 
 
@@ -160,17 +161,236 @@ func regenerate_terrain(new_difficulty: String = "") -> void:
 	_load_and_build_terrain()
 
 
-## Toggle between V1 (procedural), V2 (flat), and V3 (bumpy) terrain
+## Show only the active terrain, hide others
+func _show_active_terrain() -> void:
+	if not shadow_test_mode:
+		# Normal mode: V1만 표시
+		if _terrain_v1:
+			_terrain_v1.visible = true
+		if _terrain_v2:
+			_terrain_v2.visible = false
+		if _terrain_v3:
+			_terrain_v3.visible = false
+		print("[ProceduralSlope] Normal mode: V1 active")
+	else:
+		# Shadow test mode: V2/V3만 토글
+		if _terrain_v1:
+			_terrain_v1.visible = false
+		if _terrain_v2:
+			_terrain_v2.visible = (terrain_version == 1)
+		if _terrain_v3:
+			_terrain_v3.visible = (terrain_version == 2)
+
+		var version_names = {1: "V2", 2: "V3"}
+		print("[ProceduralSlope] Test mode: %s active" % version_names.get(terrain_version, "Unknown"))
+
+
+## Get terrain start position (consistent across V1/V2/V3)
+func _get_terrain_start_position() -> Vector3:
+	# All terrains are aligned at origin (0, 0, 0) with same Z range (+50 to -1450)
+	# Calculate start position based on difficulty config
+	if not difficulty.is_empty():
+		var config = DifficultyConfig.get_config(difficulty)
+		# Player spawns 5m above terrain, 10m back from front edge
+		return Vector3(0.0, config.vertical_drop + 5.0, -20.0 - 10.0)
+	else:
+		# Fallback for JSON mode (not used currently)
+		return Vector3(0.0, 50.0, -20.0)
+
+
+## Get active dummy player (for camera targeting)
+func get_active_dummy_player() -> CharacterBody3D:
+	return _test_dummy_player  # 공통 dummy 반환
+
+
+## Toggle shadow test mode (V2/V3 with dummies vs V1 with real player)
+func set_shadow_test_mode(enabled: bool) -> void:
+	shadow_test_mode = enabled
+
+	if enabled:
+		# 테스트 모드 진입: V2로 전환
+		terrain_version = 1
+
+		# 테스트 객체 생성 (10m 위)
+		_create_test_objects()
+
+		print("[ProceduralSlope] Shadow test mode ENABLED - Objects created 10m above terrain")
+	else:
+		# 정상 모드 복귀: V1로 전환
+		terrain_version = 0
+
+		# 테스트 객체 제거
+		_remove_test_objects()
+
+		print("[ProceduralSlope] Shadow test mode DISABLED - Objects removed")
+
+	_show_active_terrain()
+
+
+## Get active terrain node
+func _get_active_terrain() -> Node3D:
+	if terrain_version == 1:
+		return _terrain_v2
+	elif terrain_version == 2:
+		return _terrain_v3
+	return _terrain_v1
+
+
+## Get terrain ground Y position at (x, z)
+func _get_terrain_ground_y(x: float, z: float) -> float:
+	if terrain_version == 1:
+		return 0.0  # V2: Flat terrain at Y=0
+	else:
+		# V1/V3: Raycast to find ground
+		var space_state = get_world_3d().direct_space_state
+		var query = PhysicsRayQueryParameters3D.create(
+			Vector3(x, 100, z),
+			Vector3(x, -500, z)
+		)
+		query.collision_mask = 2  # Terrain layer
+		var result = space_state.intersect_ray(query)
+		return result.position.y if result else 0.0
+
+
+## Create test objects 10m above terrain
+func _create_test_objects() -> void:
+	print("\n[ProceduralSlope] Creating test objects 10m above terrain...")
+
+	# 1. Dummy Player 생성
+	var player_scene = load("res://scenes/player/player.tscn")
+	if not player_scene:
+		push_error("[ProceduralSlope] Failed to load player.tscn")
+		return
+
+	_test_dummy_player = player_scene.instantiate()
+	_test_dummy_player.name = "TestDummyPlayer"
+
+	# 지면 높이 계산
+	var ground_y = _get_terrain_ground_y(0.0, -30.0)  # 중앙 위치
+	var hover_height = 10.0  # 지면에서 10m 위
+
+	# Dummy 위치: 지면 + 10m
+	_test_dummy_player.global_position = Vector3(0.0, ground_y + hover_height, -30.0)
+	_test_dummy_player.set_script(null)
+	_test_dummy_player.set_physics_process(false)
+	_test_dummy_player.set_process(false)
+
+	# 현재 활성 지형의 자식으로 추가
+	var active_terrain = _get_active_terrain()
+	if active_terrain:
+		active_terrain.add_child(_test_dummy_player)
+
+	print("[ProceduralSlope] Dummy player created at: ", _test_dummy_player.global_position)
+
+	# 2. 테스트 Obstacles 생성 (고정 위치)
+	_create_test_obstacles_fixed(ground_y, hover_height)
+
+	print("[ProceduralSlope] Test objects created: 1 dummy + %d obstacles" % _test_obstacles.size())
+
+
+## Create test obstacles at fixed positions
+func _create_test_obstacles_fixed(ground_y: float, hover_height: float) -> void:
+	var obstacle_factory = get_node_or_null("ObstacleFactory")
+	if not obstacle_factory:
+		print("[ProceduralSlope] ObstacleFactory not found")
+		return
+
+	var rng = RandomNumberGenerator.new()
+	rng.randomize()
+
+	# Obstacle 높이 오프셋 (중심에서 바닥까지)
+	const TREE_OFFSET = 2.5
+	const ROCK_OFFSET = 0.7
+
+	# 고정 위치 배치 (Dummy 주변)
+	var positions = [
+		{"type": "tree", "pos": Vector3(5.0, 0, -40.0), "offset": TREE_OFFSET},   # 오른쪽 앞
+		{"type": "rock", "pos": Vector3(-5.0, 0, -40.0), "offset": ROCK_OFFSET},  # 왼쪽 앞
+		{"type": "tree", "pos": Vector3(10.0, 0, -30.0), "offset": TREE_OFFSET},  # 오른쪽
+		{"type": "rock", "pos": Vector3(-10.0, 0, -30.0), "offset": ROCK_OFFSET}, # 왼쪽
+	]
+
+	for data in positions:
+		var obstacle = obstacle_factory._create_obstacle_scene(data["type"], rng)
+		obstacle.name = "Test" + data["type"].capitalize()
+
+		# 위치: 지면 + 10m + 장애물 오프셋
+		obstacle.global_position = Vector3(
+			data["pos"].x,
+			ground_y + hover_height + data["offset"],
+			data["pos"].z
+		)
+		obstacle.rotate_y(rng.randf() * TAU)
+
+		# 현재 활성 지형의 자식으로 추가
+		var active_terrain = _get_active_terrain()
+		if active_terrain:
+			active_terrain.add_child(obstacle)
+
+		_test_obstacles.append(obstacle)
+		print("[ProceduralSlope] Test obstacle created: %s at %s" % [obstacle.name, obstacle.global_position])
+
+
+## Remove all test objects
+func _remove_test_objects() -> void:
+	print("[ProceduralSlope] Removing test objects...")
+
+	# Dummy player 제거
+	if _test_dummy_player:
+		_test_dummy_player.queue_free()
+		_test_dummy_player = null
+		print("[ProceduralSlope] Dummy player removed")
+
+	# Obstacles 제거
+	for obstacle in _test_obstacles:
+		if obstacle:
+			obstacle.queue_free()
+	_test_obstacles.clear()
+
+	print("[ProceduralSlope] All test objects removed")
+
+
+## Update test objects position when switching terrain (V2 ↔ V3)
+func _update_test_objects_position() -> void:
+	if not shadow_test_mode or not _test_dummy_player:
+		return
+
+	# 새 지형의 지면 높이 계산
+	var ground_y = _get_terrain_ground_y(0.0, -30.0)
+	var hover_height = 10.0
+
+	# Dummy 위치 업데이트
+	var old_pos = _test_dummy_player.global_position
+	_test_dummy_player.global_position.y = ground_y + hover_height
+
+	# Obstacles도 같은 높이 차이만큼 이동
+	var y_diff = _test_dummy_player.global_position.y - old_pos.y
+	for obstacle in _test_obstacles:
+		if obstacle:
+			obstacle.global_position.y += y_diff
+
+	print("[ProceduralSlope] Test objects repositioned to Y=%.1f (ground=%.1f + 10m)" % [ground_y + hover_height, ground_y])
+
+
+## Toggle between V2 (flat) and V3 (bumpy) terrain (shadow test mode only)
 func toggle_terrain_version() -> void:
-	terrain_version = (terrain_version + 1) % 3
+	# 테스트 모드에서만 V2 ↔ V3 토글
+	if shadow_test_mode:
+		terrain_version = 1 if terrain_version == 2 else 2
 
-	var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
-	print("\n" + "=".repeat(60))
-	print("TOGGLING TERRAIN VERSION")
-	print("  New version: %s" % version_names[terrain_version])
-	print("=".repeat(60) + "\n")
+		var version_names = {1: "V2 (Flat)", 2: "V3 (Bumpy)"}
+		print("\n" + "=".repeat(60))
+		print("TOGGLING TERRAIN VERSION (Test Mode)")
+		print("  New version: %s" % version_names.get(terrain_version, "Unknown"))
+		print("=".repeat(60) + "\n")
 
-	_load_and_build_terrain()
+		# Toggle visibility
+		_show_active_terrain()
+
+		# 테스트 객체들을 새 지형 높이에 맞춰 이동
+		_update_test_objects_position()
+	else:
+		print("[ProceduralSlope] Terrain toggle disabled in normal mode (use shadow test mode button)")
 
 
 ## Create test obstacles for shadow testing (near player spawn, all terrains)

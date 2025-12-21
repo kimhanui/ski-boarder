@@ -12,6 +12,7 @@ extends Node3D
 @onready var trick_mode_button: Button = $UI/TrickModeButton
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var light_control: VBoxContainer = $UI/LightControl
+@onready var free_camera: Camera3D = $FreeCamera
 
 
 func _ready() -> void:
@@ -49,14 +50,23 @@ func _ready() -> void:
 		_update_trick_mode_button_text()
 		print("[Main] Trick mode button connected to player")
 
-	# Connect LightControl to DirectionalLight3D
+	# Connect LightControl to DirectionalLight3D and ProceduralSlope
 	if light_control and directional_light:
 		light_control.set_light(directional_light)
-		print("[Main] Light control connected to directional light")
+		light_control.set_procedural_slope(procedural_slope)
+		print("[Main] Light control connected to directional light and terrain")
+
+	# Player is active by default (normal mode)
+	if player:
+		player.visible = true
+		player.set_physics_process(true)
+		player.set_process(true)
+		print("[Main] Normal mode: Real player active")
 
 	print("Main scene initialized")
 	print("Press F1 to cycle camera modes")
-	print("Press L to cycle terrain version (V1/V2/V3)")
+	print("Press L to cycle terrain version (V2/V3 in test mode only)")
+	print("Use '지형그림자테스트' button to toggle test mode")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -67,8 +77,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _toggle_terrain_version() -> void:
 	if procedural_slope and procedural_slope.has_method("toggle_terrain_version"):
 		procedural_slope.toggle_terrain_version()
-		var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
-		print("[Main] Terrain toggled to: %s" % version_names[procedural_slope.terrain_version])
+
+		# 테스트 모드에서만 카메라 업데이트
+		if procedural_slope and procedural_slope.get("shadow_test_mode"):
+			var version_names = ["V1 (Procedural)", "V2 (Flat)", "V3 (Bumpy)"]
+			print("[Main] Terrain toggled to: %s" % version_names[procedural_slope.terrain_version])
+			_update_camera_target()
 
 
 ## Enforce shadow settings at runtime (prevent Godot editor auto-removal)
@@ -124,3 +138,53 @@ func _update_trick_mode_button_text() -> void:
 		var mode_text = "ON" if player.trick_mode_enabled else "OFF"
 		trick_mode_button.text = "트릭 모드: " + mode_text
 		trick_mode_button.button_pressed = player.trick_mode_enabled
+
+
+## Called when shadow test mode is toggled
+func _on_shadow_test_mode_changed(enabled: bool) -> void:
+	if enabled:
+		# 테스트 모드 진입
+		print("[Main] Shadow test mode ENABLED")
+
+		# Real player 비활성화
+		if player:
+			player.visible = false
+			player.set_physics_process(false)
+			player.set_process(false)
+
+		# 카메라를 dummy로 전환
+		_update_camera_target()
+	else:
+		# 정상 모드 복귀
+		print("[Main] Shadow test mode DISABLED")
+
+		# Real player 활성화
+		if player:
+			player.visible = true
+			player.set_physics_process(true)
+			player.set_process(true)
+
+		# 카메라를 real player로 복귀
+		if free_camera and free_camera.has_method("set_target"):
+			free_camera.set_target(null)  # null = fallback to group lookup
+			print("[Main] Camera target reset to real player")
+
+
+## Update camera target to match active terrain's dummy player
+func _update_camera_target() -> void:
+	if not free_camera or not procedural_slope:
+		return
+
+	# 테스트 모드에서만 dummy로 전환
+	if procedural_slope and procedural_slope.get("shadow_test_mode"):
+		var active_dummy = procedural_slope.get_active_dummy_player()
+		if active_dummy and free_camera.has_method("set_target"):
+			free_camera.set_target(active_dummy)
+			print("[Main] Camera target updated to: %s" % active_dummy.name)
+		else:
+			push_warning("[Main] Failed to update camera target")
+	else:
+		# 정상 모드: real player
+		if free_camera.has_method("set_target"):
+			free_camera.set_target(null)  # Fallback to group lookup
+			print("[Main] Camera following real player")

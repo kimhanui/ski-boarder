@@ -7,6 +7,7 @@ extends Camera3D
 @export var fast_speed_multiplier: float = 3.0
 @export var mouse_sensitivity: float = 0.003
 @export var initial_position: Vector3 = Vector3(0, 100, 100)
+@export var target: Node3D = null  # Target to follow (for dummy player switching)
 
 var _rotation_x: float = -0.5  # Pitch
 var _rotation_y: float = 0.0   # Yaw
@@ -92,17 +93,21 @@ func activate() -> void:
 	_is_active = true
 	current = true
 
-	# Position camera to face player
-	var player = get_tree().get_first_node_in_group("player")
-	if player:
-		var player_pos = player.global_position
-		# Position camera behind and above player
-		global_position = player_pos + Vector3(0, 5, 10)
-		# Look at player
-		look_at(player_pos, Vector3.UP)
+	# Position camera to face target (if set) or player (fallback)
+	var target_node = target if target else get_tree().get_first_node_in_group("player")
+
+	if target_node:
+		var target_pos = target_node.global_position
+		# Position camera behind and above target
+		global_position = target_pos + Vector3(0, 5, 10)
+		# Look at target
+		look_at(target_pos, Vector3.UP)
 		# Update rotation variables to match
 		_rotation_y = rotation.y
 		_rotation_x = rotation.x
+		print("[FreeCamera] Activated - Following: %s" % target_node.name)
+	else:
+		print("[FreeCamera] Activated - No target found")
 
 	print("Free camera activated - Right-click and drag to rotate, WASD to move, Space/Ctrl for up/down, Shift for speed")
 
@@ -120,3 +125,18 @@ func _update_camera_rotation() -> void:
 	rotation.x = _rotation_x
 	rotation.y = _rotation_y
 	rotation.z = 0
+
+
+## Set camera target (for switching between dummy players)
+func set_target(new_target: Node3D) -> void:
+	target = new_target
+
+	# If camera is active, immediately position relative to new target
+	if target and _is_active:
+		var target_pos = target.global_position
+		global_position = target_pos + Vector3(0, 5, 10)
+		look_at(target_pos, Vector3.UP)
+		# Update rotation variables to match
+		_rotation_y = rotation.y
+		_rotation_x = rotation.x
+		print("[FreeCamera] Target switched to: %s" % target.name)

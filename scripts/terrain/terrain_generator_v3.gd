@@ -11,14 +11,15 @@ class_name TerrainGeneratorV3
 static func create_bumpy_terrain(width_m: float = 500.0, length_m: float = 1500.0) -> StaticBody3D:
 	print("[TerrainV3] Creating bumpy terrain: %.1fx%.1f meters" % [width_m, length_m])
 
-	# Mesh resolution
-	var cell_size = 2.0
-	var segments_x = int(width_m / cell_size)
-	var segments_z = int(length_m / cell_size)
+	# Mesh resolution (reduced for shadow rendering performance)
+	var cell_size = 5.0  # Increased from 2.0 to reduce vertex count
+	var segments_x = int(width_m / cell_size)  # 500/5 = 100 (similar to V2)
+	var segments_z = int(length_m / cell_size)  # 1500/5 = 300 (similar to V2)
 
 	# Build bumpy terrain mesh
 	var terrain_mesh = _build_bumpy_mesh(width_m, length_m, cell_size, segments_x, segments_z)
-
+	debug_print_mesh_arrays(terrain_mesh)
+	
 	# Create material (same as V2)
 	var material = _create_shadow_optimized_material()
 	terrain_mesh.surface_set_material(0, material)
@@ -57,7 +58,20 @@ static func create_bumpy_terrain(width_m: float = 500.0, length_m: float = 1500.
 	print("[TerrainV3] Terrain created: %d faces, collision enabled" % [faces.size() / 3])
 
 	return static_body
+static func debug_print_mesh_arrays(mesh: ArrayMesh) -> void:
+	if mesh == null:
+		print("mesh is null")
+		return
 
+	if mesh.get_surface_count() == 0:
+		print("no surfaces")
+		return
+
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[ArrayMesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arrays[ArrayMesh.ARRAY_NORMAL]
+
+	print("[DEBUG] verts:", verts.size(), " normals:", norms.size())
 
 ## Builds a bumpy mesh with noise-based height variation
 static func _build_bumpy_mesh(width_m: float, length_m: float, cell_size: float, segments_x: int, segments_z: int) -> ArrayMesh:
@@ -128,7 +142,7 @@ static func _build_bumpy_mesh(width_m: float, length_m: float, cell_size: float,
 	# Calculate normals (per-vertex from triangles)
 	normals.resize(vertices.size())
 	for i in range(normals.size()):
-		normals[i] = Vector3.UP  # Initialize
+		normals[i] = Vector3.ZERO  # Initialize to zero for proper averaging
 
 	for i in range(0, indices.size(), 3):
 		var i0 = indices[i]
@@ -168,7 +182,7 @@ static func _create_shadow_optimized_material() -> StandardMaterial3D:
 	var material = StandardMaterial3D.new()
 
 	# Pure white albedo for maximum shadow visibility
-	material.albedo_color = Color(1.0, 1.0, 1.0)
+	material.albedo_color = Color(0.2, 0.8, 0.2)
 
 	# Smooth surface for clean shadow edges
 	material.roughness = 0.3

@@ -52,7 +52,7 @@ const STEER_YAW_DAMPING = 0.92
 # Camera references
 @onready var camera_third_person = $Camera3D_ThirdPerson
 @onready var camera_third_person_front = $Camera3D_ThirdPersonFront
-@onready var camera_first_person = $Camera3D_FirstPerson
+@onready var camera_first_person = $Body/Camera3D_FirstPerson
 @onready var camera_free = $Camera3D_Free
 
 # Body parts references
@@ -87,7 +87,7 @@ var camera_mode = 0
 var hide_body_in_first_person: bool = false
 
 # Trick mode toggle
-var trick_mode_enabled: bool = false
+var trick_mode_enabled: bool = true  # 항상 활성화
 
 # Signals
 signal camera_mode_changed(mode_name: String)
@@ -292,6 +292,8 @@ func _reset_body_pose() -> void:
 		right_leg.rotation_degrees.z = 0.0
 		left_leg.position.x = -0.15
 		right_leg.position.x = 0.15
+		left_leg.position.z = 0.0  # Tail Grab Z offset reset
+		right_leg.position.z = 0.0  # Tail Grab Z offset reset
 
 	# Upper/Lower leg reset (knee joints)
 	if left_upper_leg and left_lower_leg and right_upper_leg and right_lower_leg:
@@ -299,17 +301,28 @@ func _reset_body_pose() -> void:
 		right_upper_leg.rotation_degrees.x = 0.0
 		left_lower_leg.rotation_degrees.x = 0.0
 		right_lower_leg.rotation_degrees.x = 0.0
+		left_lower_leg.position.y = -0.67  # Original Y position
+		right_lower_leg.position.y = -0.67
+		left_lower_leg.position.z = 0.0  # Tail Grab Z offset reset
+		right_lower_leg.position.z = 0.0  # Tail Grab Z offset reset
 
 	# Skis reset
 	if left_ski and right_ski:
+		left_ski.rotation_degrees.x = 0.0  # Tail Grab rotation reset
+		right_ski.rotation_degrees.x = 0.0
 		left_ski.rotation_degrees.y = 0.0
 		right_ski.rotation_degrees.y = 0.0
 		left_ski.rotation_degrees.z = 0.0
 		right_ski.rotation_degrees.z = 0.0
+		left_ski.position.y = -0.965  # Original Y position
+		right_ski.position.y = -0.965
+		left_ski.position.z = -0.3  # Original Z position
+		right_ski.position.z = -0.3
 
 	# Torso reset
 	if torso:
 		torso.position.x = 0.0
+		torso.position.z = 0.0
 		torso.rotation_degrees.y = 0.0
 
 	# Reset trick variables
@@ -664,6 +677,7 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 
 	torso.rotation_degrees.x = current_upper_lean
 
+
 	# Apply leg bending (knee bend for ski stance)
 	# Split knee joint: upper leg (thigh) + lower leg (calf) for realistic bending
 	if left_upper_leg and left_lower_leg and right_upper_leg and right_lower_leg:
@@ -769,8 +783,8 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	# === 오른팔: 뒤로 뻗어 오른쪽 스키 테일 잡기 ===
 	# X축: 팔을 뒤로 -140도 (스키 테일에 닿을 정도)
 	# Y축: 약간 안쪽으로 -30도 (몸 쪽으로)
-	var target_right_arm_x = -140.0 * intensity
-	var target_right_arm_y = -30.0 * intensity
+	var target_right_arm_x = -40.0 * intensity
+	var target_right_arm_y = -40.0 * intensity
 	right_arm.rotation_degrees.x = lerp(right_arm.rotation_degrees.x, target_right_arm_x, lerp_factor)
 	right_arm.rotation_degrees.y = lerp(right_arm.rotation_degrees.y, target_right_arm_y, lerp_factor)
 
@@ -782,22 +796,98 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	left_arm.rotation_degrees.x = lerp(left_arm.rotation_degrees.x, target_left_arm_x, lerp_factor)
 	left_arm.rotation_degrees.z = lerp(left_arm.rotation_degrees.z, target_left_arm_z, lerp_factor)
 
-	# === 다리: 무릎 강하게 굽히기 (콤팩트 포즈) ===
-	# 분리된 무릎 관절: 허벅지 + 종아리 (반대 방향 회전)
-	# 허벅지 (UpperLeg): 고관절 기준 +60도 (뒤로, 스키 테일 방향)
-	var target_upper_leg_x = 60.0 * intensity  # Positive = backward
+	# === 다리: Torso와 평행하게 회전 ===
+	# 허벅지 (UpperLeg): -30도 (Torso와 평행)
+	var target_upper_leg_x = -30.0 * intensity
 	right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 	left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 
-	# 종아리 (LowerLeg): 무릎 관절 기준 -110도 (앞으로, 더 강한 굽힘)
-	var target_lower_leg_x = -110.0 * intensity  # Negative = forward
+	# 종아리 (LowerLeg): -100도 (더 강하게 뒤로 굽힘)
+	var target_lower_leg_x = -100.0 * intensity
 	right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 	left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 
 	# === 상체: 뒤로 아치형 벤딩 ===
-	# X축: 뒤로 -50도 (역동적인 아치, 스키 테일 방향으로 휨)
-	var target_torso_x = -50.0 * intensity
+	# X축: 뒤로 -30도 (적당한 아치, 스키 테일 방향으로 휨)
+	var target_torso_x = 30.0 * intensity
+	var target_torso_z = torso.rotation_degrees.z - 0.2
 	torso.rotation_degrees.x = lerp(torso.rotation_degrees.x, target_torso_x, lerp_factor)
+	torso.position.z = lerp(torso.position.z, target_torso_z, lerp_factor)
+	
+	# === 다리 위치: Torso 회전을 따라 뒤로 이동 ===
+	# Torso가 뒤로 기울 때 고관절(다리 시작점)도 뒤로 이동
+	if left_leg and right_leg:
+		# Torso 회전 각도를 라디안으로 변환
+		var torso_rotation_rad = deg_to_rad(target_torso_x)
+
+		# Torso 높이(Y=0.15)에서 회전 시 Z축 오프셋 계산
+		# sin(rotation) * height = Z방향 이동량
+		var torso_height = 0.15  # Torso의 Y 위치
+		var leg_attach_height = -0.3  # LeftLeg의 원래 Y 위치
+		var height_diff = torso_height - leg_attach_height  # 0.45m
+
+		# 뒤로 기울 때 고관절이 뒤로 이동하는 양
+		# -50도 회전 시 약 0.35m 뒤로 이동
+		# 부호 반전: 상체가 뒤로 기울면 다리도 뒤로
+		var z_offset = -sin(torso_rotation_rad) * height_diff * intensity
+
+		# 다리를 뒤로 이동 (부드럽게 lerp)
+		left_leg.position.z = lerp(left_leg.position.z, z_offset, lerp_factor)
+		right_leg.position.z = lerp(right_leg.position.z, z_offset, lerp_factor)
+
+	# === LowerLeg 위치: UpperLeg 끝에 붙이기 ===
+	# UpperLeg이 -30° 회전하면 끝점이 이동 → LowerLeg를 그 끝점에 배치
+	if left_upper_leg and left_lower_leg and right_upper_leg and right_lower_leg:
+		# UpperLeg 회전 각도 (-30°)
+		var upper_leg_rotation_rad = deg_to_rad(-30.0 * intensity)
+		var upper_leg_half_length = 0.25  # CapsuleMesh height 0.5m / 2
+
+		# UpperLeg 끝점 위치 (UpperLeg 중심 기준)
+		# 원래 UpperLeg 중심: Y=-0.15
+		var upper_leg_end_y = -upper_leg_half_length - cos(upper_leg_rotation_rad) * upper_leg_half_length
+		var upper_leg_end_z = -sin(upper_leg_rotation_rad) * upper_leg_half_length
+
+		# LowerLeg을 UpperLeg 끝점에 배치 (LowerLeg 중심을 끝점 아래로)
+		var lower_leg_half_length = 0.25
+		var target_lower_y = upper_leg_end_y + lower_leg_half_length
+		var target_lower_z = upper_leg_end_z + lower_leg_half_length
+
+		left_lower_leg.position.y = lerp(left_lower_leg.position.y, target_lower_y, lerp_factor)
+		left_lower_leg.position.z = lerp(left_lower_leg.position.z, target_lower_z, lerp_factor)
+		right_lower_leg.position.y = lerp(right_lower_leg.position.y, target_lower_y, lerp_factor)
+		right_lower_leg.position.z = lerp(right_lower_leg.position.z, target_lower_z, lerp_factor)
+
+	# === Ski 위치: LowerLeg 끝에 붙이기 ===
+	# LowerLeg이 -100° 회전하면 끝점이 이동 → Ski를 그 끝점에 배치
+	if left_ski and right_ski and left_lower_leg and right_lower_leg:
+		# LowerLeg 회전 각도 (-100°)
+		var lower_leg_rotation_rad = deg_to_rad(-100.0 * intensity)
+		var lower_leg_half_length = 0.25
+
+		# LowerLeg의 LeftLeg 기준 position 가져오기
+		var lower_leg_pos_y = left_lower_leg.position.y  # UpperLeg 끝에 배치된 Y
+		var lower_leg_pos_z = left_lower_leg.position.z  # UpperLeg 끝에 배치된 Z
+
+		# LowerLeg 끝점 오프셋 (LowerLeg 중심에서 끝까지)
+		# LowerLeg이 -100° 회전했을 때의 끝점 방향
+		var lower_leg_end_offset_y = -cos(lower_leg_rotation_rad) * lower_leg_half_length
+		var lower_leg_end_offset_z = -sin(lower_leg_rotation_rad) * lower_leg_half_length
+
+		# 최종 Ski 위치 = LowerLeg position + 끝점 오프셋
+		var target_ski_y = lower_leg_pos_y + lower_leg_end_offset_y
+		var target_ski_z = lower_leg_pos_z + lower_leg_end_offset_z + 0.1  # 원래 Z 오프셋 유지
+
+		left_ski.position.y = lerp(left_ski.position.y, target_ski_y, lerp_factor)
+		left_ski.position.z = lerp(left_ski.position.z, target_ski_z, lerp_factor)
+		right_ski.position.y = lerp(right_ski.position.y, target_ski_y, lerp_factor)
+		right_ski.position.z = lerp(right_ski.position.z, target_ski_z, lerp_factor)
+
+		# Ski를 LowerLeg와 수직으로 회전
+		# LowerLeg -100° + 90° (수직) = -10°
+		var target_ski_rotation_x = -140.0
+
+		left_ski.rotation_degrees.x = lerp(left_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
+		right_ski.rotation_degrees.x = lerp(right_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
 
 	# 디버그 출력 (intensity가 변할 때만)
 	if abs(intensity - tail_grab_intensity) > 0.05:

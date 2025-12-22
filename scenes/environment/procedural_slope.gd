@@ -80,7 +80,7 @@ func _load_and_build_terrain() -> void:
 
 	if not _terrain_v2:
 		print("=== Generating V2 (Flat) Terrain ===")
-		_terrain_v2 = TerrainGeneratorV2.create_flat_terrain()
+		_terrain_v2 = TerrainGeneratorV2.create_flat_terrain(100.0, 200.0)  # 100m width × 200m length
 		_terrain_v2.name = "TerrainV2"
 		add_child(_terrain_v2)
 		print("V2 terrain created")
@@ -131,6 +131,9 @@ func _position_player_at_start(data: Dictionary, diff: String) -> void:
 	var spawn_position = Vector3(start_point[0], start_point[1] + 5.0, start_point[2] - 10.0)
 	player.global_position = spawn_position
 
+	# Set player rotation to face downhill (slope descends in -Z direction)
+	player.rotation.y = 0.0  # Face forward (-Z direction)
+
 	print("Player positioned at start: ", spawn_position)
 
 
@@ -155,21 +158,14 @@ func regenerate_terrain(new_difficulty: String = "") -> void:
 
 ## Show only the active terrain, hide others
 func _show_active_terrain() -> void:
-	if not shadow_test_mode:
-		# Normal mode: V1만 표시
-		if _terrain_v1:
-			_terrain_v1.visible = true
-		if _terrain_v2:
-			_terrain_v2.visible = false
-		print("[ProceduralSlope] Normal mode: V1 active")
-	else:
-		# Shadow test mode: V2만 표시
-		if _terrain_v1:
-			_terrain_v1.visible = false
-		if _terrain_v2:
-			_terrain_v2.visible = (terrain_version == 1)
+	# terrain_version에 따라 지형 표시/숨김
+	if _terrain_v1:
+		_terrain_v1.visible = (terrain_version == 0)
+	if _terrain_v2:
+		_terrain_v2.visible = (terrain_version == 1)
 
-		print("[ProceduralSlope] Test mode: V2 active")
+	var version_names = {0: "V1 (Procedural)", 1: "V2 (Sloped)"}
+	print("[ProceduralSlope] Active terrain: %s" % version_names.get(terrain_version, "Unknown"))
 
 
 ## Get terrain start position (consistent across V1/V2/V3)
@@ -385,14 +381,24 @@ func _move_player_to_terrain_start() -> void:
 	# 새 지형의 시작 위치 계산
 	var start_pos: Vector3
 	if terrain_version == 1:
-		# V2 (Flat): Y=5m (평지 위 5m)
-		start_pos = Vector3(0.0, 5.0, -30.0)
+		# V2 (Sloped 20°): 경사 지형의 높이 계산
+		# TerrainGeneratorV2는 Z=50부터 시작, 20도 경사
+		var spawn_z = -30.0
+		var terrain_start_z = 50.0  # V2 시작 Z 좌표
+		var terrain_start_y = 0.0   # V2 시작 Y 좌표 (height_y 기본값)
+		var distance_from_start = terrain_start_z - spawn_z  # 80m
+		var slope_angle_rad = deg_to_rad(20.0)  # V2 기본 경사
+		var y_drop = distance_from_start * tan(slope_angle_rad)  # ~29.1m
+		var terrain_height = terrain_start_y - y_drop  # ~-29.1m
+		var hover_height = 5.0  # 지형 위 5m
+		start_pos = Vector3(0.0, terrain_height + hover_height, spawn_z)  # (0, -24.1, -30)
 	else:
 		# V1 (Procedural): difficulty에 따른 시작 위치
 		start_pos = _get_terrain_start_position()
 
 	# 플레이어 이동 및 속도 초기화
 	player.global_position = start_pos
+	player.rotation.y = 0.0  # Face downhill (-Z direction)
 	if player.has_method("reset_velocity"):
 		player.reset_velocity()
 

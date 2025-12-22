@@ -34,8 +34,8 @@ func _ready() -> void:
 func _create_track_material() -> void:
 	track_material = StandardMaterial3D.new()
 
-	# White ski tracks
-	track_material.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
+	# Light gray ski tracks
+	track_material.albedo_color = Color(0.7, 0.7, 0.7, 1.0)
 
 	# Transparent for fading
 	track_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -155,12 +155,12 @@ func create_track_at_position(pos: Vector3, size: Vector3, part_name: String):
 	box_mesh.size = Vector3(size.x * 0.5, size.y, size.z)  # Width 50% thinner
 	mesh_instance.mesh = box_mesh
 
-	# White unshaded material
+	# Light gray unshaded material
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 1.0, 1.0)
+	material.albedo_color = Color(0.7, 0.7, 0.7)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.emission_enabled = true
-	material.emission = Color(1.0, 1.0, 1.0)
+	material.emission = Color(0.7, 0.7, 0.7)
 	material.emission_energy_multiplier = 2.0
 	mesh_instance.material_override = material
 

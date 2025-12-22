@@ -53,13 +53,13 @@ theme_override_constants/separation = 40
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 72
-text = "🏂 Ski Boarder"
+text = "⛷️ S-S-Ski"
 horizontal_alignment = 1
 
 [node name="SubtitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "3D Backcountry Snowboard Game"
+text = "3D Backcountry Ski Game"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="CenterContainer/VBoxContainer"]

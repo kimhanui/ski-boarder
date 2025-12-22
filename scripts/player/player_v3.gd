@@ -40,12 +40,12 @@ const FLIP_ROTATION_SPEED = 360.0
 const MIN_TRICK_HEIGHT = 1.5
 
 # Carving constants
-const STEER_YAW_RATE = 90.0
+const STEER_YAW_RATE = 60.0
 const SKI_YAW_MAX = 18.0
 const SKI_YAW_MAX_BOOST = 22.0
 const SKI_ROLL_MAX = 6.0
 const TORSO_ROLL_COEFFICIENT = 0.6
-const BODY_YAW_FOLLOW = 0.7
+const BODY_YAW_FOLLOW = 0.5
 const VELOCITY_HEADING_LERP = 0.1
 const STEER_YAW_DAMPING = 0.92
 
@@ -1078,8 +1078,11 @@ func _update_ski_stance(is_braking: bool, delta: float) -> void:
 
 
 func _apply_ski_carving(ski_yaw_deg: float, delta: float) -> void:
-	left_ski.rotation_degrees.y = ski_yaw_deg
-	right_ski.rotation_degrees.y = ski_yaw_deg
+	# Negate to match Godot's Y-rotation convention
+	# Godot: +Y = left, -Y = right
+	# Input: left turn = negative steer_yaw, right turn = positive steer_yaw
+	left_ski.rotation_degrees.y = -ski_yaw_deg
+	right_ski.rotation_degrees.y = -ski_yaw_deg
 
 	var ski_roll_deg = ski_yaw_deg * 0.3
 	ski_roll_deg = clamp(ski_roll_deg, -SKI_ROLL_MAX, SKI_ROLL_MAX)
@@ -1410,14 +1413,36 @@ func _create_tracks_for_touching_parts():
 		var part = touching_parts[part_name]
 		var mesh_size = _get_mesh_size(part)
 
+		# Calculate track position (default: center of part)
+		var track_position = part.global_position
+
+		# Offset to ski edge AND tail for Ski parts only
+		if part_name.contains("Ski"):
+			# Get ski's roll angle to determine which edge is touching ground
+			var ski_roll_rad = part.rotation.z
+			var ski_width = mesh_size.x  # 0.15m
+
+			# Calculate edge offset (left edge or right edge based on roll)
+			# Positive roll = right edge down, negative roll = left edge down
+			var ski_right_dir = part.global_transform.basis.x
+			var edge_offset = ski_right_dir * (ski_width * 0.5) * sign(ski_roll_rad)
+
+			# Calculate tail offset (backward along ski's actual direction)
+			var ski_backward_dir = part.global_transform.basis.z
+			var ski_length = mesh_size.z  # 1.2m
+			var tail_offset = ski_backward_dir * (ski_length * 0.5)
+
+			# Apply both offsets
+			track_position = part.global_position + edge_offset + tail_offset
+
 		# DEBUG_TRACK - Remove after testing
 		print("[자국생성] part_name: ", part_name)
-		print("[자국생성] part.global_position: ", part.global_position)
+		print("[자국생성] track_position: ", track_position)
 		# END DEBUG_TRACK
 
 		if ski_tracks:
 			ski_tracks.create_track_at_position(
-				part.global_position,
+				track_position,
 				mesh_size,
 				part_name
 			)

@@ -473,10 +473,17 @@ func _process_jump(delta: float) -> void:
 
 	# Detect trick inputs (only if trick mode enabled)
 	if trick_mode_enabled and _get_height_above_ground() >= MIN_TRICK_HEIGHT:
-		if Input.is_action_pressed("move_back") or Input.is_action_pressed("move_forward") or Input.is_key_pressed(KEY_SHIFT):
-			# Trick started - transition to FLIP (including Tail Grab)
+		# Backflip/Frontflip - transition to FLIP
+		if Input.is_action_pressed("move_back") or Input.is_action_pressed("move_forward"):
 			set_state(PlayerState.FLIP)
 			return
+
+		# Tail Grab 감지 (JUMP 상태 유지)
+		_detect_trick_inputs()
+
+	# Apply Tail Grab pose if active (JUMP 상태에서도)
+	if tail_grab_intensity > 0.01:
+		_apply_tail_grab_pose(tail_grab_intensity)
 
 	# Check for landing
 	if is_on_floor() and velocity.y <= 0:
@@ -649,16 +656,20 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		target_lean = -20.0
 		target_upper_lean = -10.0
 		target_leg_bend = -15.0  # Slight knee bend while braking
+	elif is_moving_forward and current_speed < SKATING_SPEED_THRESHOLD:
+		# 스케이팅 (저속 + 전진)
+		target_lean = 0.0
+		target_upper_lean = -45.0
+		target_leg_bend = 0.0  # 다리 펼침 (스케이팅 자세)
+		_update_arm_swing(delta)  # 팔 푸시 애니메이션
 	elif is_moving_forward:
+		# 일반 전진 (고속)
 		target_lean = 0.0
 		target_upper_lean = -45.0
 		target_leg_bend = -25.0  # Proper ski stance - knees bent
 		_update_arm_swing(delta)
-	elif current_speed > SKATING_SPEED_THRESHOLD:
-		target_lean = 0.0
-		target_upper_lean = -45.0
-		target_leg_bend = -25.0  # Knees bent while skating
 	else:
+		# 유휴 (정지/활주)
 		target_lean = 0.0
 		target_upper_lean = -15.0
 		target_leg_bend = 0.0  # Straight legs when idle
@@ -719,6 +730,11 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		var arm_base_y = 0.4  # 몸통 상단 (Torso 0.15 + 높이 절반 0.25)
 		left_arm.position.y = arm_base_y + shoulder_y_offset
 		right_arm.position.y = arm_base_y + shoulder_y_offset
+
+		# Z offset: 상체 기울기에 따라 어깨가 앞으로
+		var shoulder_z_offset = sin(torso_lean_rad) * 0.25
+		left_arm.position.z = shoulder_z_offset
+		right_arm.position.z = shoulder_z_offset
 
 
 	# Apply leg bending (knee bend for ski stance)
@@ -862,7 +878,7 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	# === 다리: Torso와 평행하게 회전 ===
 	# 허벅지 (UpperLeg): -30도 (Torso와 평행)
 	var tail_grab_upper_x = -30.0 * intensity
-	var riding_upper_x = -15.0  # Default RIDING knee bend (from line 723)
+	var riding_upper_x = 15.0  # Default RIDING knee bend (from line 723)
 	var target_upper_leg_x = lerp(riding_upper_x, tail_grab_upper_x, intensity)
 	right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 	left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)

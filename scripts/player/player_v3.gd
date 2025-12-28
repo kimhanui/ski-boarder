@@ -656,23 +656,27 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		target_lean = -20.0
 		target_upper_lean = -10.0
 		target_leg_bend = -15.0  # Slight knee bend while braking
+		_reset_skating_stance(delta)  # 스케이팅 자세 리셋
 	elif is_moving_forward and current_speed < SKATING_SPEED_THRESHOLD:
 		# 스케이팅 (저속 + 전진)
 		target_lean = 0.0
 		target_upper_lean = -45.0
 		target_leg_bend = 0.0  # 다리 펼침 (스케이팅 자세)
 		_update_arm_swing(delta)  # 팔 푸시 애니메이션
+		_update_skating_animation(delta)  # 다리 교대 밀기 + 스키 회전
 	elif is_moving_forward:
 		# 일반 전진 (고속)
 		target_lean = 0.0
 		target_upper_lean = -45.0
 		target_leg_bend = -25.0  # Proper ski stance - knees bent
 		_update_arm_swing(delta)
+		_reset_skating_stance(delta)  # 스케이팅 자세 리셋
 	else:
 		# 유휴 (정지/활주)
 		target_lean = 0.0
 		target_upper_lean = -15.0
 		target_leg_bend = 0.0  # Straight legs when idle
+		_reset_skating_stance(delta)  # 스케이팅 자세 리셋
 
 	# Always update breathing
 	_update_breathing_cycle(delta)
@@ -1147,6 +1151,45 @@ func _update_arm_swing(delta: float) -> void:
 
 	var right_arm_angle = lerp(-30.0, -45.0, 1.0 - push_intensity)
 	right_arm.rotation_degrees.x = right_arm_angle
+
+
+## 스케이팅 애니메이션: 다리 교대로 밀기 + 스키 회전
+func _update_skating_animation(delta: float) -> void:
+	skating_phase += delta * 1.5
+	if skating_phase >= 1.0:
+		skating_phase = 0.0
+
+	var is_left_push = skating_phase < 0.5
+	var phase_in_cycle = fmod(skating_phase, 0.5) / 0.5
+	var push_intensity = sin(phase_in_cycle * PI)
+
+	if is_left_push:
+		# 왼쪽 다리 push
+		var left_offset = 0.15 + push_intensity * 0.15
+		var right_offset = 0.15
+		left_leg.position.x = -left_offset
+		right_leg.position.x = right_offset
+		left_ski.rotation_degrees.y = push_intensity * 20.0
+		right_ski.rotation_degrees.y = 0.0
+	else:
+		# 오른쪽 다리 push
+		var left_offset = 0.15
+		var right_offset = 0.15 + push_intensity * 0.15
+		left_leg.position.x = -left_offset
+		right_leg.position.x = right_offset
+		left_ski.rotation_degrees.y = 0.0
+		right_ski.rotation_degrees.y = -push_intensity * 20.0
+
+
+## 스케이팅 종료 시 다리/스키 자세를 부드럽게 리셋
+func _reset_skating_stance(delta: float) -> void:
+	# 다리를 평행 위치로 복귀
+	left_leg.position.x = lerp(left_leg.position.x, -0.15, ANIMATION_SPEED * delta)
+	right_leg.position.x = lerp(right_leg.position.x, 0.15, ANIMATION_SPEED * delta)
+
+	# 스키를 0° 회전 (평행)으로 복귀
+	left_ski.rotation_degrees.y = lerp(left_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
+	right_ski.rotation_degrees.y = lerp(right_ski.rotation_degrees.y, 0.0, ANIMATION_SPEED * delta)
 
 
 func _apply_weight_shift(turn_direction: float, delta: float) -> void:

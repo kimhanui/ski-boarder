@@ -22,6 +22,7 @@ var is_open: bool = false
 var current_category: String = "jacket"
 var selected_items: Dictionary = {}  # Temporary selections (category → item_id)
 var player_customization: Node = null
+var current_page: Dictionary = {}  # Current page per category (category → page_index)
 
 
 func _ready() -> void:
@@ -97,6 +98,10 @@ func _close_wardrobe() -> void:
 func _switch_category(category: String) -> void:
 	current_category = category
 
+	# Initialize page for this category if not exists
+	if not current_page.has(category):
+		current_page[category] = 0
+
 	# Update button states
 	jacket_button.button_pressed = (category == "jacket")
 	skis_button.button_pressed = (category == "ski")
@@ -130,8 +135,17 @@ func _populate_item_grid(category: String) -> void:
 	if none_item:
 		sorted_items.insert(0, none_item)
 
-	# Create buttons (3x3 grid = 9 slots)
-	for i in range(min(sorted_items.size(), 9)):
+	# Get current page
+	var page = current_page.get(category, 0)
+	var items_per_page = 9
+	var total_pages = ceili(float(sorted_items.size()) / float(items_per_page))
+
+	# Calculate page slice
+	var start_idx = page * items_per_page
+	var end_idx = min(start_idx + items_per_page, sorted_items.size())
+
+	# Create buttons for current page (3x3 grid = 9 slots max)
+	for i in range(start_idx, end_idx):
 		var item = sorted_items[i]
 
 		# Create button with semi-transparent background
@@ -202,7 +216,10 @@ func _populate_item_grid(category: String) -> void:
 
 		item_grid.add_child(button)
 
-	print("[WardrobeScreen] Populated grid for category: %s (%d items)" % [category, sorted_items.size()])
+	# Update pagination UI
+	_update_pagination_ui(category, page, total_pages)
+
+	print("[WardrobeScreen] Populated grid for category: %s (page %d/%d, %d items total)" % [category, page + 1, total_pages, sorted_items.size()])
 
 
 func _on_item_selected(item: Dictionary) -> void:
@@ -304,3 +321,56 @@ func _on_apply_button_pressed() -> void:
 func _on_test_mode_check_box_toggled(button_pressed: bool) -> void:
 	TestModeManager.set_test_mode(button_pressed)
 	print("[WardrobeScreen] Test mode toggled: %s" % ("ON" if button_pressed else "OFF"))
+
+
+## Pagination handlers
+
+func _on_prev_page_pressed() -> void:
+	_change_page(-1)
+
+
+func _on_next_page_pressed() -> void:
+	_change_page(1)
+
+
+func _change_page(delta: int) -> void:
+	var category = current_category
+	var page = current_page.get(category, 0)
+	var all_items = ItemDatabase.get_items_by_category(category)
+	var items_per_page = 9
+	var total_pages = ceili(float(all_items.size()) / float(items_per_page))
+
+	# Calculate new page
+	var new_page = page + delta
+
+	# Clamp to valid range
+	if new_page < 0 or new_page >= total_pages:
+		return
+
+	# Update page
+	current_page[category] = new_page
+
+	# Refresh grid
+	_populate_item_grid(category)
+
+
+func _update_pagination_ui(category: String, page: int, total_pages: int) -> void:
+	# References to pagination UI (will be added in tscn)
+	var prev_button = get_node_or_null("CenterContainer/MainPanel/MarginContainer/VBoxContainer/ContentHBox/RightVBox/PaginationContainer/PrevPageButton")
+	var next_button = get_node_or_null("CenterContainer/MainPanel/MarginContainer/VBoxContainer/ContentHBox/RightVBox/PaginationContainer/NextPageButton")
+	var page_label = get_node_or_null("CenterContainer/MainPanel/MarginContainer/VBoxContainer/ContentHBox/RightVBox/PaginationContainer/PageIndicator")
+
+	if not prev_button or not next_button or not page_label:
+		return
+
+	# Update label
+	page_label.text = "%d / %d" % [page + 1, total_pages]
+
+	# Update button states
+	prev_button.disabled = (page <= 0)
+	next_button.disabled = (page >= total_pages - 1)
+
+	# Hide pagination if only 1 page
+	var pagination_container = get_node_or_null("CenterContainer/MainPanel/MarginContainer/VBoxContainer/ContentHBox/RightVBox/PaginationContainer")
+	if pagination_container:
+		pagination_container.visible = (total_pages > 1)

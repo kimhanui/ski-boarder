@@ -30,6 +30,7 @@ var right_pole: MeshInstance3D
 
 var head: MeshInstance3D
 var helmet_node: Node3D = null  # Current helmet instance (as child of head)
+var jacket_node: Node3D = null  # Current jacket instance (as child of torso)
 
 # Current equipment (item IDs)
 var current_equipment: Dictionary = {
@@ -93,9 +94,15 @@ func apply_item(item_id: String) -> void:
 	# Apply to player mesh
 	match item.category:
 		"jacket":
-			var color = DEFAULT_JACKET_COLOR if is_none else item.color
-			_apply_jacket_color(color)
-			# TODO: Add jacket mesh replacement if needed
+			# Check if mesh path is provided (3D model)
+			if item.has("mesh_path") and not item.mesh_path.is_empty() and not is_none:
+				var offset = item.get("position_offset")
+				var scale = item.get("scale")
+				_apply_jacket_mesh(item.mesh_path, offset, scale)
+			else:
+				# Fallback to color change
+				var color = DEFAULT_JACKET_COLOR if is_none else item.color
+				_apply_jacket_color(color)
 		"ski":
 			# Check if mesh path is provided (3D model)
 			if item.has("mesh_path") and not item.mesh_path.is_empty() and not is_none:
@@ -111,7 +118,9 @@ func apply_item(item_id: String) -> void:
 		"helmet":
 			# Check if mesh path is provided (3D model)
 			if item.has("mesh_path") and not item.mesh_path.is_empty() and not is_none:
-				_apply_helmet_mesh(item.mesh_path)
+				var offset = item.get("position_offset")
+				var scale = item.get("scale")
+				_apply_helmet_mesh(item.mesh_path, offset, scale)
 			else:
 				# Fallback to color change
 				var color = DEFAULT_HELMET_COLOR if is_none else item.color
@@ -129,23 +138,35 @@ func _apply_current_equipment() -> void:
 			var is_none = item.get("is_none", false)
 			match category:
 				"jacket":
-					var color = DEFAULT_JACKET_COLOR if is_none else item.color
-					_apply_jacket_color(color)
+					if item.has("mesh_path") and not item.mesh_path.is_empty() and not is_none:
+						var offset = item.get("position_offset")
+						var scale = item.get("scale")
+						_apply_jacket_mesh(item.mesh_path, offset, scale)
+					else:
+						var color = DEFAULT_JACKET_COLOR if is_none else item.color
+						_apply_jacket_color(color)
 				"ski":
 					var color = DEFAULT_SKI_COLOR if is_none else item.color
 					_apply_ski_color(color)
 				"pole":
 					var color = DEFAULT_POLE_COLOR if is_none else item.color
 					_apply_pole_color(color)
-				"helmet":
+				"helmet": # Vector3(0.5, 0.5, 0.5)
 					if item.has("mesh_path") and not item.mesh_path.is_empty() and not is_none:
-						_apply_helmet_mesh(item.mesh_path)
+						var offset = item.get("position_offset")
+						var scale = item.get("scale")
+						_apply_helmet_mesh(item.mesh_path, offset, scale)
 					else:
 						var color = DEFAULT_HELMET_COLOR if is_none else item.color
 						_apply_helmet_color(color)
 
 
 func _apply_jacket_color(color: Color) -> void:
+	# Remove jacket mesh if exists
+	if jacket_node:
+		jacket_node.queue_free()
+		jacket_node = null
+
 	# Jacket affects: Torso, Arms (Upper), Legs (Upper/Lower)
 	var parts = [
 		torso,
@@ -160,6 +181,71 @@ func _apply_jacket_color(color: Color) -> void:
 	for part in parts:
 		if part and part is MeshInstance3D:
 			_set_material_color(part, color)
+
+
+## Apply jacket mesh (3D model as child node)
+func _apply_jacket_mesh(mesh_path: String, position_offset: Vector3, scale: Vector3) -> void:
+	if mesh_path.is_empty():
+		return
+
+	# Remove old jacket if exists
+	if jacket_node:
+		jacket_node.queue_free()
+		jacket_node = null
+
+	# Load mesh from file
+	var mesh_scene = load(mesh_path)
+	if not mesh_scene:
+		print("[PlayerCustomization] Failed to load mesh: %s" % mesh_path)
+		return
+
+	# If it's a PackedScene (GLB/GLTF), instantiate it
+	if mesh_scene is PackedScene:
+		var instance = mesh_scene.instantiate()
+
+		# Create a container node for the jacket
+		jacket_node = Node3D.new()
+		jacket_node.name = "JacketNode"
+
+		# Apply transforms to fit torso
+		jacket_node.scale = scale
+		jacket_node.rotation_degrees.y = 180.0  # Flip front/back
+		jacket_node.position = position_offset  # Use parameter from item_database
+
+		# Add jacket instance to container
+		jacket_node.add_child(instance)
+
+		# Add container to Torso (as child, keeping original torso mesh)
+		torso.add_child(jacket_node)
+
+		print("[PlayerCustomization] Applied jacket mesh: %s" % mesh_path)
+		print("  └─ jacket_node.scale: %s" % jacket_node.scale)
+		print("  └─ jacket_node.position: %s" % jacket_node.position)
+		print("  └─ jacket_node.rotation_degrees: %s" % jacket_node.rotation_degrees)
+		print("  └─ jacket_node.global_position: %s" % jacket_node.global_position)
+		print("  └─ torso.global_position: %s" % torso.global_position)
+		print("  └─ jacket_node children count: %d" % jacket_node.get_child_count())
+		if jacket_node.get_child_count() > 0:
+			var child = jacket_node.get_child(0)
+			print("  └─ First child type: %s" % child.get_class())
+			if child is MeshInstance3D:
+				print("     └─ Mesh AABB: %s" % child.get_aabb())
+
+	# If it's a direct Mesh resource
+	elif mesh_scene is Mesh:
+		# Create MeshInstance3D for the jacket
+		jacket_node = MeshInstance3D.new()
+		jacket_node.name = "JacketNode"
+		jacket_node.mesh = mesh_scene
+
+		# Apply transforms
+		jacket_node.scale = scale
+		jacket_node.rotation_degrees.y = 180.0
+
+		# Add to Torso
+		torso.add_child(jacket_node)
+
+		print("[PlayerCustomization] Applied jacket mesh: %s" % mesh_path)
 
 
 func _apply_ski_color(color: Color) -> void:
@@ -219,7 +305,7 @@ func _apply_helmet_color(color: Color) -> void:
 
 
 ## Apply helmet mesh (3D model as child node)
-func _apply_helmet_mesh(mesh_path: String) -> void:
+func _apply_helmet_mesh(mesh_path: String, position_offset: Vector3, scale: Vector3) -> void:
 	if mesh_path.is_empty():
 		return
 
@@ -243,9 +329,9 @@ func _apply_helmet_mesh(mesh_path: String) -> void:
 		helmet_node.name = "HelmetNode"
 
 		# Apply transforms to fit head
-		helmet_node.scale = Vector3(0.5, 0.5, 0.5)  # Scale down to 30%
+		helmet_node.scale = scale  # Scale down to 30%
 		helmet_node.rotation_degrees.y = 180.0  # Flip front/back
-		helmet_node.position = Vector3(0, -0.2, 0)  # Adjust if needed
+		helmet_node.position = position_offset  # Use parameter from item_database
 
 		# Add helmet instance to container
 		helmet_node.add_child(instance)
@@ -277,6 +363,12 @@ func _set_material_color(mesh_instance: MeshInstance3D, color: Color) -> void:
 	var mat = mesh_instance.get_surface_override_material(0)
 	if mat and mat is StandardMaterial3D:
 		mat.albedo_color = color
+
+
+## Update helmet visibility (for first-person camera mode)
+func update_helmet_visibility(is_first_person: bool) -> void:
+	if helmet_node:
+		helmet_node.visible = !is_first_person
 
 
 ## Save equipment to file

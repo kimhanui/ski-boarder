@@ -1,15 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://cw8xqv1x2n3yb"]
+[gd_scene load_steps=2 format=3 uid="uid://cw8xqv1x2n3yb"]
 
-[ext_resource type="Script" path="res://scripts/ui/title_screen.gd" id="1_title_screen"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
-bg_color = Color(0.2, 0.5, 0.8, 0.9)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.3)
-shadow_size = 4
+[ext_resource type="Script" uid="uid://dj7gfl3milnkp" path="res://scripts/ui/title_screen.gd" id="1_title_screen"]
 
 [node name="TitleScreen" type="Control"]
 layout_mode = 3

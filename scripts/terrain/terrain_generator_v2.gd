@@ -241,9 +241,15 @@ static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m:
 	print("[TerrainV2] Generated %d obstacles" % obstacle_count)
 
 
-## Creates a single obstacle mesh (rock or tree)
-static func _create_obstacle_mesh(type: String, scale_val: float) -> MeshInstance3D:
+## Creates a single obstacle with collision (rock or tree)
+static func _create_obstacle_mesh(type: String, scale_val: float) -> StaticBody3D:
+	# Create StaticBody3D for collision (same as V1)
+	var obstacle = StaticBody3D.new()
+	obstacle.collision_layer = 2  # Environment layer (same as terrain)
+	obstacle.collision_mask = 0
+
 	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 	if type == "rock":
 		var mesh = SphereMesh.new()
@@ -258,6 +264,16 @@ static func _create_obstacle_mesh(type: String, scale_val: float) -> MeshInstanc
 		material.albedo_color = Color(0.4, 0.4, 0.45)
 		material.roughness = 0.9
 		mesh.surface_set_material(0, material)
+
+		# Add mesh to obstacle
+		obstacle.add_child(mesh_instance)
+
+		# Add collision shape
+		var collision_shape = CollisionShape3D.new()
+		var sphere_shape = SphereShape3D.new()
+		sphere_shape.radius = 1.5 * scale_val
+		collision_shape.shape = sphere_shape
+		obstacle.add_child(collision_shape)
 
 	elif type == "tree":
 		# Simple tree: cylinder trunk + sphere foliage
@@ -288,4 +304,15 @@ static func _create_obstacle_mesh(type: String, scale_val: float) -> MeshInstanc
 		mesh_instance.add_child(trunk)
 		mesh_instance.add_child(foliage)
 
-	return mesh_instance
+		# Add mesh to obstacle
+		obstacle.add_child(mesh_instance)
+
+		# Add collision shape (cylinder for trunk)
+		var collision_shape = CollisionShape3D.new()
+		var cylinder_shape = CylinderShape3D.new()
+		cylinder_shape.radius = 0.8  # Slightly smaller than visual
+		cylinder_shape.height = 5.0
+		collision_shape.shape = cylinder_shape
+		obstacle.add_child(collision_shape)
+
+	return obstacle

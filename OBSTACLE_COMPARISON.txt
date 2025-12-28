@@ -1,0 +1,221 @@
+OBSTACLE GENERATION COMPARISON: V1 vs V2
+
+================================================================================
+V1 (PROCEDURAL TERRAIN) - OBSTACLES WORKING
+================================================================================
+
+   Main Scene
+   │
+   └─ ProceduralSlope (procedural_slope.gd)
+      │
+      └─ _load_and_build_terrain()
+         │
+         ├─ TerrainGenerator.apply_slope_data()
+         │  │
+         │  ├─ _generate_procedural_path()           → path_data
+         │  │
+         │  ├─ _generate_procedural_obstacles()       → obstacles_data
+         │  │  │   ✓ Creates: [{type, pos, scale}, ...]
+         │  │  │   ✓ Uses difficulty config
+         │  │  │   ✓ Uses path data for placement
+         │  │  │   ✓ Calculates heights
+         │  │  │
+         │  │  └─ Returns: Array of obstacle dicts
+         │  │
+         │  ├─ _build_obstacles(obstacles_data)
+         │  │  │   ✓ Converts dicts to MeshInstance3D
+         │  │  │   ✓ Adds to "Obstacles" node
+         │  │  │
+         │  │  └─ Returns: Node3D (Obstacles)
+         │  │
+         │  └─ Returns: Node3D root
+         │     ├─ TerrainMesh
+         │     ├─ RidePath
+         │     ├─ Obstacles        ← OBSTACLES HERE
+         │     └─ Checkpoints
+         │
+         └─ _terrain_v1 = result
+            └─ ✓ OBSTACLES VISIBLE
+
+RESULT: Obstacles visible because they're created as part of terrain generation
+
+
+================================================================================
+V2 (FLAT TERRAIN) - OBSTACLES NOT WORKING
+================================================================================
+
+   Main Scene
+   │
+   └─ ProceduralSlope (procedural_slope.gd)
+      │
+      ├─ _load_and_build_terrain()
+      │  │
+      │  └─ TerrainGeneratorV2.create_flat_terrain()
+      │     │
+      │     ├─ _build_flat_mesh()
+      │     │  └─ Creates: ArrayMesh with sloped surface
+      │     │
+      │     ├─ _create_shadow_optimized_material()
+      │     │  └─ Creates: StandardMaterial3D
+      │     │
+      │     └─ Returns: StaticBody3D
+      │        ├─ TerrainMesh
+      │        └─ CollisionShape3D
+      │           └─ ✗ NO OBSTACLES GENERATED
+      │
+      ├─ _terrain_v2 = result (StaticBody3D with no obstacles)
+      │
+      └─ ObstacleFactory initialization (line 33-36)
+         │
+         ├─ get_node_or_null("ObstacleFactory")     → Found
+         │
+         └─ call_deferred("set_obstacle_density", "normal")
+            │
+            ├─ Wait for deferred call...
+            │
+            ├─ set_obstacle_density("normal")  (obstacle_factory.gd line 205)
+            │  │
+            │  └─ spawn_obstacles_near_player(10)  (line 217)
+            │     │
+            │     ├─ _find_player()
+            │     │  │
+            │     │  └─ get_tree().get_nodes_in_group("player")
+            │     │     │
+            │     │     └─ ✗ Player not in "player" group?
+            │     │        or Player not spawned yet?
+            │     │
+            │     └─ if not player:
+            │        │
+            │        └─ push_warning("[ObstacleFactory] No player found...")
+            │           return  ← ✗ EXITS HERE - NO OBSTACLES!
+            │
+            └─ ✗ NO OBSTACLES CREATED
+
+
+PROBLEM POINTS:
+1. Player reference timing:    ObstacleFactory runs before player is ready
+2. Raycast collision check:    May fail if physics not initialized  
+3. No backup method:           V2 doesn't generate obstacles like V1 does
+
+
+================================================================================
+SIDE-BY-SIDE COMPARISON
+================================================================================
+
+ASPECT                  V1 (PROCEDURAL)              V2 (FLAT)
+─────────────────────────────────────────────────────────────
+Generation Method       Via TerrainGenerator         Via ObstacleFactory
+Timing                  During terrain creation      After terrain + player
+Obstacle Count          From config                  From density multiplier
+Obstacle Type           Rock/Tree (procedural)       Rock/Tree (dynamic)
+Placement               Off the main path            Around player
+Height Calculation      Via obstacle data            Via raycasts
+Visibility             Guaranteed (always renders)  Dependent on timing
+Collision              Built-in (part of terrain)   Dynamic (scene-based)
+Player Dependency      No                           Yes (critical)
+Physics Requirement    Terrain collision only       Full physics world
+
+
+================================================================================
+CODE FLOW DIAGRAM
+================================================================================
+
+V1 FLOW:
+────────
+TerrainGenerator.apply_slope_data()
+  ├─ _generate_procedural_obstacles()
+  │   └─ Creates: Array of {type, pos, scale}
+  │
+  ├─ _build_obstacles()
+  │   ├─ For each obstacle dict:
+  │   │   └─ Create MeshInstance3D at position
+  │   └─ Add all to "Obstacles" node
+  │
+  └─ Return root with Obstacles node
+
+
+V2 FLOW:
+────────
+TerrainGeneratorV2.create_flat_terrain()
+  └─ Return: StaticBody3D (terrain only, no obstacles)
+
+ProceduralSlope._ready()
+  └─ call_deferred("set_obstacle_density", "normal")
+      └─ ObstacleFactory.spawn_obstacles_near_player()
+          ├─ Find player
+          │  └─ If not found → RETURN (no obstacles)
+          │
+          └─ For each obstacle to place:
+              ├─ Random position around player
+              ├─ Raycast to find ground
+              │  └─ If raycast fails → skip
+              │
+              ├─ Create obstacle scene
+              └─ Add to world
+
+
+================================================================================
+KEY FILES & LINES
+================================================================================
+
+V1 Obstacle Generation:
+  - /scripts/terrain/terrain_generator.gd:41
+    └─ obstacles_data = _generate_procedural_obstacles(...)
+  
+  - /scripts/terrain/terrain_generator.gd:61
+    └─ obstacles_node = _build_obstacles(obstacles_data)
+  
+  - /scripts/terrain/terrain_generator.gd:563-606
+    └─ static func _generate_procedural_obstacles(...)
+  
+  - /scripts/terrain/terrain_generator.gd:419-476
+    └─ static func _build_obstacles(...)
+
+
+V2 Obstacle System:
+  - /scenes/environment/procedural_slope.gd:33-36
+    └─ obstacle_factory.call_deferred("set_obstacle_density", "normal")
+  
+  - /scripts/terrain/obstacle_factory.gd:204-220
+    └─ func set_obstacle_density(mode: String) -> void
+  
+  - /scripts/terrain/obstacle_factory.gd:422-500
+    └─ func spawn_obstacles_near_player(count: int) -> void
+  
+  - /scripts/terrain/obstacle_factory.gd:52-68
+    └─ func _ready() -> void
+
+
+================================================================================
+QUICK FIX OPTIONS
+================================================================================
+
+OPTION 1: Generate V2 obstacles like V1
+─────────────────────────────────────────
+  Add to TerrainGeneratorV2:
+    - static func _generate_obstacles_for_v2()
+    - Similar to terrain_generator._generate_procedural_obstacles()
+    - Account for 20° slope angle
+    - Call from create_flat_terrain()
+
+OPTION 2: Wait for player before spawning
+──────────────────────────────────────────
+  In ProceduralSlope._ready():
+    - After _load_and_build_terrain()
+    - Wait for player to be fully ready
+    - THEN call obstacle_factory.set_obstacle_density()
+
+OPTION 3: Use test mode approach
+─────────────────────────────────
+  In ObstacleFactory:
+    - Use _create_test_obstacles_fixed() logic
+    - Fixed positions relative to spawn
+    - Proper height calculations for V2
+
+OPTION 4: Add fallback spawning
+────────────────────────────────
+  In ObstacleFactory.spawn_obstacles_near_player():
+    - If player not found, use fixed spawn positions
+    - Use origin (0, terrain_height, -30) as reference
+    - Place obstacles around spawn area
+

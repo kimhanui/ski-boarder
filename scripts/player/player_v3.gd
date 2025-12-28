@@ -81,6 +81,7 @@ const STEER_YAW_DAMPING = 0.92
 # Systems
 @onready var ski_tracks = $SkiTracks
 @onready var animation_player: AnimationPlayer = $AnimationPlayer  # For FSM animations
+@onready var player_customization = $PlayerCustomization
 
 # Camera mode
 var camera_mode = 0
@@ -677,6 +678,48 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 
 	torso.rotation_degrees.x = current_upper_lean
 
+	# Keep head on top of tilted torso (RIDING and FLIP states)
+	# Head rotation stays upright (no rotation), only position follows torso
+	if head and (state == PlayerState.RIDING or state == PlayerState.FLIP):
+		# Calculate Z offset to keep head on top of tilted torso
+		var lean_rad = deg_to_rad(current_upper_lean)
+		var torso_half_height = 0.25  # CapsuleMesh height/2
+		var neck_height = 0.25  # Gap between torso top and head
+
+		# Head moves forward when torso tilts forward (negative lean)
+		# Z offset = sin(rotation) * (torso_top_offset + neck_height)
+		var total_height = torso_half_height + neck_height
+		var z_offset = sin(lean_rad) * total_height
+
+		head.position.z = z_offset
+
+	# Keep arms attached to body sides when tilting (RIDING and FLIP states)
+	if left_arm and right_arm and (state == PlayerState.RIDING or state == PlayerState.FLIP):
+		var tilt_rad = deg_to_rad(current_tilt)
+		var shoulder_height = 0.3  # Y position of arms (shoulder level)
+
+		# When body tilts left (positive Z rotation):
+		# - Left shoulder moves left and down
+		# - Right shoulder moves right and up
+
+		# X offset: horizontal displacement (always positive to move toward center)
+		var x_offset = abs(sin(tilt_rad)) * shoulder_height
+
+		# Original arm X positions
+		var left_arm_base_x = -0.35
+		var right_arm_base_x = 0.35
+
+		left_arm.position.x = left_arm_base_x + x_offset
+		right_arm.position.x = right_arm_base_x - x_offset
+
+		# 팔 상단 Y위치: 몸통 기울기에 따라 어깨 위치 조정
+		# 몸통이 앞으로 기울면 어깨가 아래로 이동
+		var torso_lean_rad = deg_to_rad(current_upper_lean)
+		var shoulder_y_offset = sin(torso_lean_rad) * 0.25  # 몸통 절반 높이만큼 이동
+		var arm_base_y = 0.4  # 몸통 상단 (Torso 0.15 + 높이 절반 0.25)
+		left_arm.position.y = arm_base_y + shoulder_y_offset
+		right_arm.position.y = arm_base_y + shoulder_y_offset
+
 
 	# Apply leg bending (knee bend for ski stance)
 	# Split knee joint: upper leg (thigh) + lower leg (calf) for realistic bending
@@ -690,6 +733,7 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		var target_lower_leg = target_leg_bend * 1.0  # 100% at knee for sharper bend
 		left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg, ANIMATION_SPEED * delta)
 		right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg, ANIMATION_SPEED * delta)
+
 
 	# Ski stance
 	_update_ski_stance(is_braking, delta)
@@ -783,37 +827,84 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 	# === 오른팔: 뒤로 뻗어 오른쪽 스키 테일 잡기 ===
 	# X축: 팔을 뒤로 -140도 (스키 테일에 닿을 정도)
 	# Y축: 약간 안쪽으로 -30도 (몸 쪽으로)
-	var target_right_arm_x = -40.0 * intensity
-	var target_right_arm_y = -40.0 * intensity
+	# Tail grab targets
+	var tail_grab_right_x = -40.0 * intensity
+	var tail_grab_right_y = -40.0 * intensity
+
+	# RIDING targets (from line 1078-1079: breathing animation)
+	# Use current_upper_lean as base (like RIDING does)
+	var riding_right_x = current_upper_lean - 5.0  # Default breathing offset
+
+	# Blend: intensity=1 → tail_grab, intensity=0 → riding
+	var target_right_arm_x = lerp(riding_right_x, tail_grab_right_x, intensity)
+	var target_right_arm_y = lerp(0.0, tail_grab_right_y, intensity)  # Y returns to 0
+
 	right_arm.rotation_degrees.x = lerp(right_arm.rotation_degrees.x, target_right_arm_x, lerp_factor)
 	right_arm.rotation_degrees.y = lerp(right_arm.rotation_degrees.y, target_right_arm_y, lerp_factor)
 
 	# === 왼팔: 균형 잡기 위해 위/옆으로 ===
 	# X축: 위로 45도
 	# Z축: 옆으로 30도
-	var target_left_arm_x = 45.0 * intensity
-	var target_left_arm_z = 30.0 * intensity
+	# Tail grab targets
+	var tail_grab_left_x = 45.0 * intensity
+	var tail_grab_left_z = 30.0 * intensity
+
+	# RIDING targets
+	var riding_left_x = current_upper_lean + 5.0  # Default breathing offset
+
+	# Blend
+	var target_left_arm_x = lerp(riding_left_x, tail_grab_left_x, intensity)
+	var target_left_arm_z = lerp(0.0, tail_grab_left_z, intensity)  # Z returns to 0
+
 	left_arm.rotation_degrees.x = lerp(left_arm.rotation_degrees.x, target_left_arm_x, lerp_factor)
 	left_arm.rotation_degrees.z = lerp(left_arm.rotation_degrees.z, target_left_arm_z, lerp_factor)
 
 	# === 다리: Torso와 평행하게 회전 ===
 	# 허벅지 (UpperLeg): -30도 (Torso와 평행)
-	var target_upper_leg_x = -30.0 * intensity
+	var tail_grab_upper_x = -30.0 * intensity
+	var riding_upper_x = -15.0  # Default RIDING knee bend (from line 723)
+	var target_upper_leg_x = lerp(riding_upper_x, tail_grab_upper_x, intensity)
 	right_upper_leg.rotation_degrees.x = lerp(right_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 	left_upper_leg.rotation_degrees.x = lerp(left_upper_leg.rotation_degrees.x, target_upper_leg_x, lerp_factor)
 
 	# 종아리 (LowerLeg): -100도 (더 강하게 뒤로 굽힘)
-	var target_lower_leg_x = -100.0 * intensity
+	var tail_grab_lower_x = -100.0 * intensity
+	var riding_lower_x = -25.0  # Default RIDING calf bend (from line 728)
+	var target_lower_leg_x = lerp(riding_lower_x, tail_grab_lower_x, intensity)
 	right_lower_leg.rotation_degrees.x = lerp(right_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 	left_lower_leg.rotation_degrees.x = lerp(left_lower_leg.rotation_degrees.x, target_lower_leg_x, lerp_factor)
 
 	# === 상체: 뒤로 아치형 벤딩 ===
 	# X축: 뒤로 -30도 (적당한 아치, 스키 테일 방향으로 휨)
-	var target_torso_x = 30.0 * intensity
-	var target_torso_z = torso.rotation_degrees.z - 0.2
+	# Tail grab target
+	var tail_grab_torso_x = 30.0 * intensity
+
+	# RIDING target (from line 682: current_upper_lean)
+	var riding_torso_x = current_upper_lean
+
+	# Blend: intensity=1 → tail_grab, intensity=0 → riding
+	var target_torso_x = lerp(riding_torso_x, tail_grab_torso_x, intensity)
+
 	torso.rotation_degrees.x = lerp(torso.rotation_degrees.x, target_torso_x, lerp_factor)
+
+	# Position.z should return to 0 (RIDING default)
+	var target_torso_z = lerp(0.0, torso.rotation_degrees.z - 0.2, intensity)
 	torso.position.z = lerp(torso.position.z, target_torso_z, lerp_factor)
-	
+
+	# === 머리: 몸통 상단에 붙이기 ===
+	# Torso가 뒤로 회전할 때 head가 몸통 상단에 붙어있도록 위치 조정
+	if head:
+		var torso_rotation_rad = deg_to_rad(target_torso_x)  # 30° * intensity
+		var torso_half_height = 0.25
+		var neck_height = 0.25
+		var total_height = torso_half_height + neck_height
+
+		# Torso가 뒤로 기울면 head는 앞으로 이동 (sin 사용)
+		# intensity=0 → target_head_z=0 (원래 위치)
+		# intensity=1 → target_head_z≈0.25 (앞으로 이동)
+		var target_head_z = sin(torso_rotation_rad) * total_height
+		head.position.z = lerp(head.position.z, target_head_z, lerp_factor)
+
 	# === 다리 위치: Torso 회전을 따라 뒤로 이동 ===
 	# Torso가 뒤로 기울 때 고관절(다리 시작점)도 뒤로 이동
 	if left_leg and right_leg:
@@ -849,8 +940,18 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 
 		# LowerLeg을 UpperLeg 끝점에 배치 (LowerLeg 중심을 끝점 아래로)
 		var lower_leg_half_length = 0.25
-		var target_lower_y = upper_leg_end_y + lower_leg_half_length
-		var target_lower_z = upper_leg_end_z + lower_leg_half_length
+		var calculated_lower_y = upper_leg_end_y + lower_leg_half_length
+		var calculated_lower_z = upper_leg_end_z + lower_leg_half_length
+
+		# Original positions (from player.tscn)
+		var original_lower_y = -0.67
+		var original_lower_z = 0.0
+
+		# Interpolate between calculated position and original position based on intensity
+		# intensity=1.0 → calculated position (tail grab)
+		# intensity=0.0 → original position (normal)
+		var target_lower_y = lerp(original_lower_y, calculated_lower_y, intensity)
+		var target_lower_z = lerp(original_lower_z, calculated_lower_z, intensity)
 
 		left_lower_leg.position.y = lerp(left_lower_leg.position.y, target_lower_y, lerp_factor)
 		left_lower_leg.position.z = lerp(left_lower_leg.position.z, target_lower_z, lerp_factor)
@@ -884,7 +985,7 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 
 		# Ski를 LowerLeg와 수직으로 회전
 		# LowerLeg -100° + 90° (수직) = -10°
-		var target_ski_rotation_x = -140.0
+		var target_ski_rotation_x = -140.0 * intensity
 
 		left_ski.rotation_degrees.x = lerp(left_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
 		right_ski.rotation_degrees.x = lerp(right_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
@@ -1013,8 +1114,9 @@ func _update_breathing_cycle(delta: float) -> void:
 
 	var arm_phase_offset = breathing_phase + PI * 0.5
 	var arm_idle_swing = sin(arm_phase_offset) * 5.0
-	left_arm.rotation_degrees.x = current_upper_lean + arm_idle_swing
-	right_arm.rotation_degrees.x = current_upper_lean - arm_idle_swing
+	# Arms horizontal at sides (0°), not following torso lean
+	left_arm.rotation_degrees.x = 0.0 + arm_idle_swing
+	right_arm.rotation_degrees.x = 0.0 - arm_idle_swing
 
 
 func _update_arm_swing(delta: float) -> void:
@@ -1180,6 +1282,10 @@ func _update_visibility() -> void:
 
 	if head:
 		head.visible = !is_first_person
+
+	# Hide helmet in first-person
+	if player_customization:
+		player_customization.update_helmet_visibility(is_first_person)
 
 	if is_first_person and hide_body_in_first_person:
 		if torso:
@@ -1390,11 +1496,6 @@ func _get_mesh_size(node: Node3D) -> Vector3:
 
 func _on_body_part_touched_ground(body: Node, part: Node3D, part_name: String):
 	if body.is_in_group("terrain"):
-		# DEBUG_COLLISION - Remove after testing
-		print("[충돌] part_name: ", part_name)
-		print("[충돌] part.name: ", part.name)
-		print("[충돌] part.global_position: ", part.global_position)
-		# END DEBUG_COLLISION
 		touching_parts[part_name] = part
 
 func _on_body_part_left_ground(body: Node, part_name: String):

@@ -399,7 +399,7 @@ func _physics_process(delta: float) -> void:
 	_update_air_rotation_ui()
 
 	# Debug fall detection
-	if global_position.y < -50:
+	if global_position.y < -70:
 		print("Player fell through terrain! Respawning...")
 		respawn()
 
@@ -738,6 +738,7 @@ func _update_riding_animations(is_moving_forward: bool, is_braking: bool, turn_i
 		# Z offset: 상체 기울기에 따라 어깨가 앞으로
 		var shoulder_z_offset = sin(torso_lean_rad) * 0.25
 		left_arm.position.z = shoulder_z_offset
+		
 		right_arm.position.z = shoulder_z_offset
 
 
@@ -1285,7 +1286,7 @@ func _update_body_yaw_follow(delta: float) -> void:
 ## 이렇게 하면 UI 버튼 클릭 시 Player가 입력을 가로채지 않음
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_camera"):
-		camera_mode = (camera_mode + 1) % 4
+		camera_mode = (camera_mode + 1) % 3  # 3가지 모드만: 0(뒤), 1(앞), 2(1인칭)
 		_apply_camera_mode()
 		camera_mode_changed.emit(_get_camera_mode_name())
 
@@ -1299,26 +1300,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _apply_camera_mode() -> void:
 	match camera_mode:
-		0:
+		0:  # 3인칭 (뒤)
 			camera_third_person.current = true
 			camera_third_person_front.current = false
 			camera_first_person.current = false
 			camera_free.deactivate()
-		1:
+		1:  # 3인칭 (앞)
 			camera_third_person.current = false
 			camera_third_person_front.current = true
 			camera_first_person.current = false
 			camera_free.deactivate()
-		2:
+		2:  # 1인칭
 			camera_third_person.current = false
 			camera_third_person_front.current = false
 			camera_first_person.current = true
 			camera_free.deactivate()
-		3:
-			camera_third_person.current = false
-			camera_third_person_front.current = false
-			camera_first_person.current = false
-			camera_free.activate()
 
 	_update_visibility()
 
@@ -1328,7 +1324,6 @@ func _get_camera_mode_name() -> String:
 		0: return "3인칭 (뒤)"
 		1: return "3인칭 (앞)"
 		2: return "1인칭"
-		3: return "프리 카메라"
 		_: return "알 수 없음"
 
 

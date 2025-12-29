@@ -9,7 +9,7 @@ extends Node3D
 @export var random_seed: int = -1
 
 ## Terrain version: 0=V1 (Procedural), 1=V2 (Flat)
-@export_enum("V1 (Procedural)", "V2 (Flat)") var terrain_version: int = 0
+@export_enum("V1 (Procedural)", "V2 (Flat)") var terrain_version: int = 1
 
 ## Optional JSON file path. If difficulty is set, this is ignored and terrain is generated procedurally.
 @export var slope_data_path: String = "res://resources/slope_data.json"
@@ -103,11 +103,16 @@ func _position_player_at_start(data: Dictionary, diff: String) -> void:
 	# For procedural generation, calculate start position from config
 	var start_point: Array
 
-	if not diff.is_empty():
-		# Procedural: use config to get start height
+	# V2 지형은 Y=0 부근에 있으므로 다른 높이 사용
+	if terrain_version == 1:  # V2 (Flat)
+		# V2는 0-200m 길이의 평평한 경사면, Y=0 부근
+		start_point = [0, 5, -20]  # 지형 표면 약간 위
+		print("Calculated V2 start point: [%.1f, %.1f, %.1f]" % [start_point[0], start_point[1], start_point[2]])
+	elif not diff.is_empty():
+		# V1 Procedural: use config to get start height
 		var config = DifficultyConfig.get_config(diff)
 		start_point = [0, config.vertical_drop, -20]
-		print("Calculated procedural start point: [%.1f, %.1f, %.1f]" % [start_point[0], start_point[1], start_point[2]])
+		print("Calculated V1 procedural start point: [%.1f, %.1f, %.1f]" % [start_point[0], start_point[1], start_point[2]])
 	else:
 		# JSON: get from path spline data
 		var path_data = data.get("path_spline", {})
@@ -127,7 +132,7 @@ func _position_player_at_start(data: Dictionary, diff: String) -> void:
 		return
 
 	# Position player above start point with some clearance
-	# Move player slightly 	into the slope (negative Z) to ensure they're on terrain
+	# Move player slightly into the slope (negative Z) to ensure they're on terrain
 	var spawn_position = Vector3(start_point[0], start_point[1] + 5.0, start_point[2] - 10.0)
 	player.global_position = spawn_position
 

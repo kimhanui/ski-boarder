@@ -94,12 +94,13 @@ static func _build_flat_mesh(width_m: float, length_m: float, height_y: float, s
 	var surface_normal = Vector3(0, cos(slope_angle_rad), sin(slope_angle_rad)).normalized()
 
 	# Define 5 hole positions scattered across slope (player spawns at Z=-30)
+	# Adjusted positions to prevent respawn trigger (Y < -70)
 	var hole_positions = [
-		Vector3(-30, 0, -40),    # Left-top
-		Vector3(25, 0, -60),     # Right-middle
-		Vector3(0, 0, -80),      # Center
-		Vector3(-35, 0, -100),   # Left-bottom
-		Vector3(30, 0, -120),    # Right-bottom
+		Vector3(-30, 0, -35),    # Left-top (Y ≈ -31.0m)
+		Vector3(25, 0, -50),     # Right-middle (Y ≈ -36.4m)
+		Vector3(0, 0, -65),      # Center (Y ≈ -41.9m)
+		Vector3(-35, 0, -80),    # Left-bottom (Y ≈ -47.3m)
+		Vector3(30, 0, -95),     # Right-bottom (Y ≈ -52.8m)
 	]
 	var hole_radius = 12.0  # Meters (smaller)
 	var hole_depth = 3.0    # Meters at center (shallower)
@@ -226,7 +227,7 @@ static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m:
 		# Calculate height based on slope
 		var z_distance = start_z - z
 		var y_drop = z_distance * slope_ratio
-		var y = -y_drop + 1.0  # Slight elevation above ground
+		var y = -y_drop  # Ground level (collision shapes handle elevation)
 
 		# Random obstacle type and scale
 		var type = "rock" if rng.randf() > 0.4 else "tree"

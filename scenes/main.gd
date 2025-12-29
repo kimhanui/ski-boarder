@@ -19,6 +19,9 @@ func _ready() -> void:
 	# Force DirectionalLight3D shadow settings (prevent Godot editor from removing them)
 	_enforce_shadow_settings()
 
+	# Add key guide to UI
+	_add_key_guide()
+
 	# Connect Test Mode Manager signal
 	TestModeManager.test_mode_changed.connect(_on_test_mode_changed)
 	# Apply initial test mode state
@@ -76,7 +79,11 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_terrain"):
-		_toggle_terrain_version()
+		# L 키는 테스트 모드일 때만 작동
+		if TestModeManager.test_mode_enabled:
+			_toggle_terrain_version()
+		else:
+			print("[Main] L key ignored - test mode OFF")
 
 
 func _toggle_terrain_version() -> void:
@@ -215,3 +222,19 @@ func _on_test_mode_changed(enabled: bool) -> void:
 
 	# Note: Functionality remains active even when UI is hidden
 	# Keyboard shortcuts still work (e.g., L for terrain toggle)
+
+
+func _add_key_guide() -> void:
+	# 키 가이드 Label 생성
+	var key_guide_script = load("res://scripts/ui/key_guide.gd")
+	var key_guide = Label.new()
+	key_guide.set_script(key_guide_script)
+	key_guide.name = "KeyGuide"
+
+	# UI CanvasLayer에 추가
+	var ui = $UI
+	if ui:
+		ui.add_child(key_guide)
+		print("[Main] Key guide added to UI")
+	else:
+		push_error("[Main] UI node not found, cannot add key guide")

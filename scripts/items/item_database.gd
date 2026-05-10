@@ -19,18 +19,12 @@ func _load_default_items() -> void:
 	items["none_ski"] = _create_item("none_ski", "착용 안 함", "ski", Color(0, 0, 0, 0), false, true)
 	items["ski_red"] = _create_item("ski_red", "빨간 스키", "ski", Color(0.9, 0.1, 0.1), true)
 	items["ski_blue"] = _create_item("ski_blue", "파란 스키", "ski", Color(0.2, 0.4, 0.9))
-	items["ski_black"] = _create_item("ski_black", "검은 스키", "ski", Color(0.1, 0.1, 0.1))
-	items["ski_yellow"] = _create_item("ski_yellow", "노란 스키", "ski", Color(0.95, 0.95, 0.2))
 	items["ski_green"] = _create_item("ski_green", "초록 스키", "ski", Color(0.2, 0.8, 0.3))
-	items["ski_white"] = _create_item("ski_white", "흰색 스키", "ski", Color(0.95, 0.95, 0.95))
-	items["ski_purple"] = _create_item("ski_purple", "보라 스키", "ski", Color(0.6, 0.2, 0.8))
-	items["ski_orange"] = _create_item("ski_orange", "주황 스키", "ski", Color(1.0, 0.6, 0.2))
 	items["ski_pink"] = _create_item("ski_pink", "분홍 스키", "ski", Color(1.0, 0.4, 0.7))
-	items["ski_pink2"] = _create_item("ski_pink2", "분홍 스키", "ski", Color(1.0, 0.4, 0.7))
-	items["ski_pink3"] = _create_item("ski_pink3", "분홍 스키", "ski", Color(1.0, 0.4, 0.7))
 
 	# === Poles (폴) ===
 	items["none_pole"] = _create_item("none_pole", "착용 안 함", "pole", Color(0, 0, 0, 0), false, true)
+	items["pole_pink"] = _create_item("pole_pink", "분홍 폴", "pole", Color(1.0, 0.4, 0.7))
 
 	# === Helmets (헬멧) ===
 	items["none_helmet"] = _create_item("none_helmet", "착용 안 함", "helmet", Color(0, 0, 0, 0), false, true)
@@ -79,19 +73,6 @@ func _load_default_items() -> void:
 		"res://assets/models/helmets/poop_helmet_thumbnail.png",  # 썸네일 경로
 		Vector3(0, 0.2, 0), # 위치 조정
 		Vector3(0.15, 0.15, 0.15)
-	)
-	
-	items["banana_jacket"] = _create_item(
-		"banana_jacket",                                    # ID (Dictionary 키와 동일)
-		"바나나 자켓",                                    # 표시 이름
-		"jacket",                                        # 카테고리
-		Color(1.0, 0.0, 0.0),                            # 기본 색상 (폴백용)
-		true,                                            # 기본 아이템 여부
-		false,                                           # "착용 안 함" 여부
-		"res://assets/models/helmets/banana_helmet.glb",        # 모델 파일 경로
-		"res://assets/models/helmets/banana_helmet_thumbnail.png",  # 썸네일 경로
-		Vector3(0, -1.35, 0), # 위치 조정
-		Vector3(20, 20, 28) # 크기 조정
 	)
 	items["banana_helmet"] = _create_item(
 		"banana_helmet",                                    # ID (Dictionary 키와 동일)

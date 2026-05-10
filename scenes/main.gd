@@ -71,6 +71,7 @@ func _ready() -> void:
 		player.set_process(true)
 		print("[Main] Normal mode: Real player active")
 
+	# Animals are now spawned by ObstacleFactory (as obstacles)
 	print("Main scene initialized")
 	print("Press F1 to cycle camera modes")
 	print("Press L to cycle terrain version (V2/V3 in test mode only)")

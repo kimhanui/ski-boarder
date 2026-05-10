@@ -3,6 +3,12 @@ extends CharacterBody3D
 # V3: FSM-based state management with auto-recovery and landing failure detection
 # Based on player_state_prompt.md requirements
 
+# Debug flags (set to true only when debugging - KEEP FALSE for performance)
+const DEBUG_FSM = false
+const DEBUG_COLLISION = false
+const DEBUG_TRICKS = false
+const DEBUG_LANDING = false
+
 # Player State Machine (FSM)
 enum PlayerState { IDLE, RIDING, JUMP, FLIP, LANDING, FALLEN, RECOVER }
 var state: PlayerState = PlayerState.IDLE
@@ -183,7 +189,8 @@ func set_state(new_state: PlayerState) -> void:
 	var old_state_name = PlayerState.keys()[state]
 	var new_state_name = PlayerState.keys()[new_state]
 
-	print("[FSM] %s → %s" % [old_state_name, new_state_name])
+	if DEBUG_FSM:
+		print("[FSM] %s → %s" % [old_state_name, new_state_name])
 
 	state = new_state
 	_update_state_ui()
@@ -210,39 +217,33 @@ func _enter_state(new_state: PlayerState) -> void:
 
 
 func _enter_idle() -> void:
-	print("[IDLE] Entered")
 	_reset_body_pose()
 	if animation_player and animation_player.has_animation("idle"):
 		animation_player.play("idle")
 
 
 func _enter_riding() -> void:
-	print("[RIDING] Entered - Ready to ride")
 	_reset_body_pose()
 	if animation_player and animation_player.has_animation("ride"):
 		animation_player.play("ride")
 
 
 func _enter_jump() -> void:
-	print("[JUMP] Entered - Jumping")
 	if animation_player and animation_player.has_animation("jump"):
 		animation_player.play("jump")
 
 
 func _enter_flip() -> void:
-	print("[FLIP] Entered - Performing trick")
 	if animation_player and animation_player.has_animation("flip"):
 		animation_player.play("flip")
 
 
 func _enter_landing() -> void:
-	print("[LANDING] Entered - Checking landing conditions")
 	if animation_player and animation_player.has_animation("landing"):
 		animation_player.play("landing")
 
 
 func _enter_fallen() -> void:
-	print("[FALLEN] Entered - Player fell down")
 	velocity = Vector3.ZERO
 	# Reduce gravity for fallen state
 	# (Note: CharacterBody3D doesn't have gravity_scale, we'll handle in _physics_process)
@@ -251,9 +252,15 @@ func _enter_fallen() -> void:
 	if animation_player and animation_player.has_animation("fall"):
 		animation_player.play("fall")
 
+	# Show FAILED text and fade to black
+	_create_failed_overlay()
+
+	# Auto-respawn after a short delay
+	await get_tree().create_timer(1.0).timeout
+	respawn()
+
 
 func _enter_recover() -> void:
-	print("[RECOVER] Entered - Getting back up")
 	recover_timer = 0.0
 
 	# Correct rotation
@@ -271,7 +278,6 @@ func _enter_recover() -> void:
 
 ## Reset body pose to default standing position
 func _reset_body_pose() -> void:
-	print("[FSM] Resetting body pose to default")
 
 	# Body reset
 	if body:
@@ -353,7 +359,6 @@ func _update_state_ui() -> void:
 
 ## Animation finished callback
 func _on_animation_finished(anim_name: String) -> void:
-	print("[AnimationPlayer] Animation finished: %s" % anim_name)
 
 	match anim_name:
 		"fall":
@@ -398,9 +403,8 @@ func _physics_process(delta: float) -> void:
 	_update_speed_ui()
 	_update_air_rotation_ui()
 
-	# Debug fall detection
-	if global_position.y < -70:
-		print("Player fell through terrain! Respawning...")
+	# Debug fall detection (safety net for 400m terrain, ends at ~-108m)
+	if global_position.y < -150:
 		respawn()
 
 
@@ -561,10 +565,8 @@ func _check_landing_failed() -> bool:
 
 	if dot < LANDING_TILT_THRESHOLD:
 		var tilt_angle = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
-		print("[LANDING] FAILED - Body tilt=%.1f° (threshold=60°)" % tilt_angle)
 		return true
 
-	print("[LANDING] SUCCESS - Body tilt OK")
 	return false
 
 
@@ -779,11 +781,9 @@ func _detect_trick_inputs() -> void:
 			# Tail Grab만 단독 실행
 			trick_in_progress = true
 			current_trick = "Tail Grab"
-			print("[Trick] Starting Tail Grab!")
 		elif not current_trick.contains("Tail Grab"):
 			# 이미 다른 트릭 중 + Shift 누름 = 콤보
 			current_trick = current_trick + " + Tail Grab"
-			print("[Trick] Combo: %s!" % current_trick)
 	else:
 		tail_grab_intensity = lerp(tail_grab_intensity, 0.0, 0.15)
 
@@ -794,14 +794,12 @@ func _detect_trick_inputs() -> void:
 		if not trick_in_progress:
 			trick_in_progress = true
 			current_trick = "Backflip"
-			print("[Trick] Starting Backflip!")
 	elif Input.is_action_pressed("move_forward"):
 		# Frontflip
 		trick_flip_speed = FLIP_ROTATION_SPEED
 		if not trick_in_progress:
 			trick_in_progress = true
 			current_trick = "Frontflip"
-			print("[Trick] Starting Frontflip!")
 	else:
 		trick_flip_speed = lerp(trick_flip_speed, 0.0, 0.15)
 
@@ -1011,9 +1009,6 @@ func _apply_tail_grab_pose(intensity: float) -> void:
 		left_ski.rotation_degrees.x = lerp(left_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
 		right_ski.rotation_degrees.x = lerp(right_ski.rotation_degrees.x, target_ski_rotation_x, lerp_factor)
 
-	# 디버그 출력 (intensity가 변할 때만)
-	if abs(intensity - tail_grab_intensity) > 0.05:
-		print("[Tail Grab] Pose intensity: %.2f" % intensity)
 
 
 ## Helper functions (from v2)
@@ -1026,7 +1021,6 @@ func _calculate_jump_boost() -> float:
 	var on_ramp = _detect_ramp_peak()
 	if on_ramp:
 		jump_vel *= JUMP_RAMP_BOOST
-		print("[Player] Jump ramp boost! velocity: %.1f m/s" % jump_vel)
 
 	return jump_vel
 
@@ -1079,7 +1073,6 @@ func _calculate_trick_score() -> void:
 	var num_rotations = floor(total_rotation_abs / 360.0)
 
 	if num_rotations == 0:
-		print("[Trick] Incomplete rotation (%.1f°), no score" % total_rotation_abs)
 		return
 
 	var rotation_remainder = fmod(total_rotation_abs, 360.0)
@@ -1089,7 +1082,6 @@ func _calculate_trick_score() -> void:
 	const PERFECT_LANDING_TOLERANCE = 10.0
 
 	if landing_error > LANDING_TOLERANCE:
-		print("[Trick] FAILED! Rotation error: %.1f° (need ±%.0f°)" % [landing_error, LANDING_TOLERANCE])
 		return
 
 	var base_score = 0
@@ -1102,7 +1094,6 @@ func _calculate_trick_score() -> void:
 	var bonus = 0
 	if landing_error <= PERFECT_LANDING_TOLERANCE:
 		bonus = 50
-		print("[Trick] ✨ PERFECT LANDING! ✨")
 
 	trick_score = base_score + bonus
 	total_score += trick_score
@@ -1116,10 +1107,6 @@ func _calculate_trick_score() -> void:
 		trick_full_name = "Triple " + current_trick
 	else:
 		trick_full_name = str(num_rotations) + "x " + current_trick
-
-	print("[Trick] SUCCESS! %s (%.1f°)" % [trick_full_name, total_rotation_abs])
-	print("  → Score: +%d pts (base: %d, bonus: %d)" % [trick_score, base_score, bonus])
-	print("  → Total Score: %d pts" % total_score)
 
 	trick_performed.emit(trick_full_name)
 
@@ -1286,7 +1273,9 @@ func _update_body_yaw_follow(delta: float) -> void:
 ## 이렇게 하면 UI 버튼 클릭 시 Player가 입력을 가로채지 않음
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_camera"):
-		camera_mode = (camera_mode + 1) % 3  # 3가지 모드만: 0(뒤), 1(앞), 2(1인칭)
+		# 테스트 모드면 프리카메라 포함 4개 모드, 아니면 3개 모드
+		var max_modes = 4 if TestModeManager.test_mode_enabled else 3
+		camera_mode = (camera_mode + 1) % max_modes
 		_apply_camera_mode()
 		camera_mode_changed.emit(_get_camera_mode_name())
 
@@ -1315,6 +1304,11 @@ func _apply_camera_mode() -> void:
 			camera_third_person_front.current = false
 			camera_first_person.current = true
 			camera_free.deactivate()
+		3:  # 프리카메라 (테스트 모드 전용)
+			camera_third_person.current = false
+			camera_third_person_front.current = false
+			camera_first_person.current = false
+			camera_free.activate()
 
 	_update_visibility()
 
@@ -1324,6 +1318,7 @@ func _get_camera_mode_name() -> String:
 		0: return "3인칭 (뒤)"
 		1: return "3인칭 (앞)"
 		2: return "1인칭"
+		3: return "프리카메라"
 		_: return "알 수 없음"
 
 
@@ -1402,6 +1397,11 @@ func set_trick_mode(enabled: bool) -> void:
 
 
 func respawn() -> void:
+	# Remove any existing failed overlay
+	var existing_overlay = get_tree().root.get_node_or_null("FailedUI")
+	if existing_overlay:
+		existing_overlay.queue_free()
+
 	global_position = spawn_position
 	rotation.y = spawn_rotation
 	velocity = Vector3.ZERO
@@ -1417,7 +1417,9 @@ func respawn() -> void:
 	_reset_body_pose()
 	set_state(PlayerState.IDLE)
 
-	print("Player (V3) respawned at: ", spawn_position)
+	# Fade in from black
+	_create_respawn_fade_in()
+
 
 
 func _enable_player_shadows() -> void:
@@ -1471,21 +1473,13 @@ func _enable_player_shadows() -> void:
 		if node:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	print("[Player V3] Shadows enabled for %d meshes" % mesh_nodes.size())
 
 
 ## Ski track collision detection setup
 func _setup_body_part_collision_detection():
+	# Only track skis for performance (reduced from 10 to 2 body parts)
 	var body_parts = [
-		"Body/Head",
-		"Body/Torso",
-		"Body/LeftArm/UpperArm",
-		"Body/RightArm/UpperArm",
-		"Body/LeftLeg/UpperLeg",
-		"Body/LeftLeg/LowerLeg",
 		"Body/LeftLeg/Ski",
-		"Body/RightLeg/UpperLeg",
-		"Body/RightLeg/LowerLeg",
 		"Body/RightLeg/Ski"
 	]
 
@@ -1531,7 +1525,6 @@ func _add_collision_area_to_part(part: Node3D, part_name: String):
 
 	part.add_child(area)
 
-	print("[Player] Collision area added to: ", part_name, " size: ", mesh_size)
 
 func _get_mesh_size(node: Node3D) -> Vector3:
 	if node is MeshInstance3D:
@@ -1555,7 +1548,8 @@ func _on_body_part_touched_ground(body: Node, part: Node3D, part_name: String):
 func _on_body_part_left_ground(body: Node, part_name: String):
 	if body.is_in_group("terrain"):
 		touching_parts.erase(part_name)
-		print("[충돌종료] part_name: ", part_name, " | Remaining: ", touching_parts.keys())
+		if DEBUG_COLLISION:
+			print("[충돌종료] part_name: ", part_name, " | Remaining: ", touching_parts.keys())
 
 func _create_tracks_for_touching_parts():
 	# Only create tracks when player is moving
@@ -1590,14 +1584,83 @@ func _create_tracks_for_touching_parts():
 			# Apply both offsets
 			track_position = part.global_position + edge_offset + tail_offset
 
-		# DEBUG_TRACK - Remove after testing
-		print("[자국생성] part_name: ", part_name)
-		print("[자국생성] track_position: ", track_position)
-		# END DEBUG_TRACK
-
 		if ski_tracks:
 			ski_tracks.create_track_at_position(
 				track_position,
 				mesh_size,
 				part_name
 			)
+
+
+## FALLEN state UI overlay
+func _create_failed_overlay() -> void:
+	# Create UI layer for "FAILED" text and fade to black
+	var canvas_layer = CanvasLayer.new()
+	canvas_layer.name = "FailedUI"
+	get_tree().root.add_child(canvas_layer)
+
+	# Create black overlay (fade out to black)
+	var fade_overlay = ColorRect.new()
+	fade_overlay.name = "FadeOverlay"
+	fade_overlay.color = Color(0, 0, 0, 0)  # Start transparent
+	fade_overlay.anchor_right = 1.0
+	fade_overlay.anchor_bottom = 1.0
+	canvas_layer.add_child(fade_overlay)
+
+	# Create "FAILED" label
+	var label = Label.new()
+	label.text = "FAILED"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+	# Position at screen center
+	label.anchor_left = 0.5
+	label.anchor_right = 0.5
+	label.anchor_top = 0.5
+	label.anchor_bottom = 0.5
+	label.offset_left = -200
+	label.offset_right = 200
+	label.offset_top = -50
+	label.offset_bottom = 50
+
+	# Style: Large red text
+	label.add_theme_font_size_override("font_size", 80)
+	label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))  # Red
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 5)
+
+	canvas_layer.add_child(label)
+
+	# Animate: Fade text in, fade screen to black
+	label.modulate.a = 0.0
+	var tween = create_tween()
+	tween.set_parallel(true)
+	# Fade text in quickly
+	tween.tween_property(label, "modulate:a", 1.0, 0.3)
+	# Fade screen to black slowly
+	tween.tween_property(fade_overlay, "color:a", 1.0, 1.0)
+
+
+## Respawn fade in effect
+func _create_respawn_fade_in() -> void:
+	# Create UI layer for fade in from black
+	var canvas_layer = CanvasLayer.new()
+	canvas_layer.name = "RespawnFadeUI"
+	get_tree().root.add_child(canvas_layer)
+
+	# Create black overlay (start at black, fade to transparent)
+	var fade_overlay = ColorRect.new()
+	fade_overlay.name = "FadeOverlay"
+	fade_overlay.color = Color(0, 0, 0, 1)  # Start black
+	fade_overlay.anchor_right = 1.0
+	fade_overlay.anchor_bottom = 1.0
+	canvas_layer.add_child(fade_overlay)
+
+	# Animate: Fade from black to transparent
+	var tween = create_tween()
+	tween.tween_property(fade_overlay, "color:a", 0.0, 0.5)
+
+	# Remove overlay after fade completes
+	await get_tree().create_timer(0.5).timeout
+	if canvas_layer:
+		canvas_layer.queue_free()

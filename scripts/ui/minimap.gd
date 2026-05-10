@@ -28,6 +28,10 @@ var obstacle_overlay: Control  # Overlay for drawing obstacle dots
 var camera_height := 150.0  # Fixed height above terrain
 var camera_update_smoothing := 0.1  # Lower = smoother but more lag
 
+# Performance optimization
+var update_timer := 0.0
+const UPDATE_INTERVAL := 0.1  # Update obstacles every 0.1s instead of every frame
+
 
 func _ready() -> void:
 	_setup_ui()
@@ -134,13 +138,18 @@ func _create_arrow_texture() -> Texture2D:
 	return ImageTexture.create_from_image(image)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not player or not minimap_camera:
 		return
 
 	_follow_player()
 	_update_player_arrow()
-	_update_obstacle_dots()
+
+	# Update obstacles less frequently for performance
+	update_timer += delta
+	if update_timer >= UPDATE_INTERVAL:
+		update_timer = 0.0
+		_update_obstacle_dots()
 
 
 ## Follow player with camera

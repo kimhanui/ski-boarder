@@ -11,11 +11,13 @@ signal density_changed(mode: String)
 @export var terrain_collision_mask: int = 2  # Terrain collision layer
 @export var player_radius_m: float = 70.0  # Radius around player for normal mode
 
-# Base counts for "normal" mode (total 10 obstacles)
+# Base counts for "normal" mode (total 10 obstacles + animals)
 @export_group("Base Counts (Normal Mode)")
 @export var tree_count_base := 4
 @export var grass_count_base := 4
 @export var rock_count_base := 2
+@export var wolf_count_base := 4
+@export var deer_count_base := 4
 
 # Density multipliers
 const DENSITY_MULTIPLIERS = {
@@ -24,12 +26,52 @@ const DENSITY_MULTIPLIERS = {
 	"dense": 2.0
 }
 
+# Animal configuration
+const ANIMAL_CONFIGS = {
+	"wolf": {
+		"fbx_path": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/wolf.fbx",
+		"scale_min": 3.6,
+		"scale_max": 5.0,
+		"speed_min": 1.8,
+		"speed_max": 3.0,
+		"patrol_range_min": 20.0,
+		"patrol_range_max": 30.0,
+		"height_offset": 0.5
+	},
+	"deer_1": {
+		"fbx_path": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/deer_1.fbx",
+		"scale_min": 3.8,
+		"scale_max": 4.4,
+		"speed_min": 1.8,
+		"speed_max": 2.5,
+		"patrol_range_min": 15.0,
+		"patrol_range_max": 25.0,
+		"height_offset": 0.5
+	},
+	"deer_2": {
+		"fbx_path": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/deer_2.fbx",
+		"scale_min": 4.0,
+		"scale_max": 4.6,
+		"speed_min": 2.0,
+		"speed_max": 2.4,
+		"patrol_range_min": 15.0,
+		"patrol_range_max": 25.0,
+		"height_offset": 0.5
+	}
+}
+
 # Obstacle type meshes (simple placeholders)
 var tree_mesh: Mesh
 var grass_mesh: Mesh
 var rock_mesh_small: Mesh
 var rock_mesh_medium: Mesh
 var rock_mesh_large: Mesh
+
+# Animal FBX scenes
+var wolf_scene: PackedScene
+var deer1_scene: PackedScene
+var deer2_scene: PackedScene
+var animal_controller_script: GDScript
 
 # MultiMesh instances
 var trees_multimesh: MultiMeshInstance3D
@@ -51,6 +93,7 @@ var normal_mode_obstacles: Array[Node3D] = []
 
 func _ready() -> void:
 	_create_placeholder_meshes()
+	_load_animal_scenes()
 	_create_multimesh_instances()
 	_add_default_exclusion_zones()
 
@@ -80,6 +123,27 @@ func _create_placeholder_meshes() -> void:
 	rock_mesh_small = _create_rock_mesh(0.3)
 	rock_mesh_medium = _create_rock_mesh(0.6)
 	rock_mesh_large = _create_rock_mesh(1.2)
+
+
+## Load animal FBX scenes
+func _load_animal_scenes() -> void:
+	wolf_scene = load(ANIMAL_CONFIGS["wolf"]["fbx_path"])
+	deer1_scene = load(ANIMAL_CONFIGS["deer_1"]["fbx_path"])
+	deer2_scene = load(ANIMAL_CONFIGS["deer_2"]["fbx_path"])
+	animal_controller_script = load("res://scripts/animals/wolf_controller.gd")
+
+	if not wolf_scene:
+		push_error("[ObstacleFactory] Failed to load wolf.fbx")
+	if not deer1_scene:
+		push_error("[ObstacleFactory] Failed to load deer_1.fbx")
+	if not deer2_scene:
+		push_error("[ObstacleFactory] Failed to load deer_2.fbx")
+	if not animal_controller_script:
+		push_error("[ObstacleFactory] Failed to load wolf_controller.gd")
+
+	print("[ObstacleFactory] Animal scenes loaded: wolf=%s, deer1=%s, deer2=%s" % [
+		wolf_scene != null, deer1_scene != null, deer2_scene != null
+	])
 
 
 func _create_tree_mesh() -> Mesh:
@@ -442,13 +506,17 @@ func spawn_obstacles_near_player(count: int) -> void:
 
 	# Create obstacle type distribution based on count
 	var obstacle_types: Array[String] = []
-	var tree_ratio = 0.3  # 30% trees
-	var grass_ratio = 0.4  # 40% grass
-	var rock_ratio = 0.3   # 30% rocks
+	var tree_ratio = 0.2     # 20% trees
+	var grass_ratio = 0.3    # 30% grass
+	var rock_ratio = 0.15    # 15% rocks
+	var wolf_ratio = 0.2     # 20% wolves
+	var deer_ratio = 0.15    # 15% deer (mixed deer_1 and deer_2)
 
 	var num_trees = max(1, int(count * tree_ratio))
 	var num_grass = max(1, int(count * grass_ratio))
-	var num_rocks = count - num_trees - num_grass
+	var num_rocks = max(1, int(count * rock_ratio))
+	var num_wolves = max(1, int(count * wolf_ratio))
+	var num_deer = count - num_trees - num_grass - num_rocks - num_wolves
 
 	for i in range(num_trees):
 		obstacle_types.append("tree")
@@ -456,6 +524,14 @@ func spawn_obstacles_near_player(count: int) -> void:
 		obstacle_types.append("grass")
 	for i in range(num_rocks):
 		obstacle_types.append("rock")
+	for i in range(num_wolves):
+		obstacle_types.append("wolf")
+	for i in range(num_deer):
+		# Randomly choose between deer_1 and deer_2
+		if rng.randf() > 0.5:
+			obstacle_types.append("deer_1")
+		else:
+			obstacle_types.append("deer_2")
 
 	# Shuffle for random distribution
 	obstacle_types.shuffle()
@@ -584,6 +660,10 @@ func _create_obstacle_scene(type: String, rng: RandomNumberGenerator) -> Node3D:
 		label_text = "Rock (" + rock_size_name + ")"
 		label_height = rock_radius * 1.5 + 0.5  # Above rock
 
+	elif type == "wolf" or type == "deer_1" or type == "deer_2":
+		# Animals are different - return FBX instance with controller script
+		return _create_animal_obstacle(type, rng)
+
 	# Add 3D label above obstacle
 	_add_3d_label(obstacle, label_text, label_height)
 
@@ -592,6 +672,48 @@ func _create_obstacle_scene(type: String, rng: RandomNumberGenerator) -> Node3D:
 	obstacle.scale = Vector3(scale, scale, scale)
 
 	return obstacle
+
+
+## Create animal obstacle from FBX scene
+func _create_animal_obstacle(type: String, rng: RandomNumberGenerator) -> Node3D:
+	var config = ANIMAL_CONFIGS[type]
+	var animal_scene: PackedScene = null
+
+	# Select FBX scene
+	if type == "wolf":
+		animal_scene = wolf_scene
+	elif type == "deer_1":
+		animal_scene = deer1_scene
+	elif type == "deer_2":
+		animal_scene = deer2_scene
+
+	if not animal_scene:
+		push_error("[ObstacleFactory] Animal scene not loaded: %s" % type)
+		return Node3D.new()  # Return empty node as fallback
+
+	# Instantiate FBX
+	var animal = animal_scene.instantiate()
+	animal.name = type.capitalize().replace("_", " ")
+
+	# Random scale
+	var scale_val = rng.randf_range(config["scale_min"], config["scale_max"])
+	animal.scale = Vector3(scale_val, scale_val, scale_val)
+
+	# Apply color material
+	var color = _get_animal_color(type, rng)
+	_apply_solid_color_to_animal(animal, color)
+
+	# Attach controller script
+	animal.set_script(animal_controller_script)
+
+	# Set patrol properties - forward/backward movement using transform.basis
+	# Randomly choose forward or backward
+	var forward_direction = 1.0 if rng.randf() > 0.5 else -1.0
+	animal.patrol_direction_multiplier = forward_direction  # Just +1 or -1
+	animal.patrol_speed = rng.randf_range(config["speed_min"], config["speed_max"])
+	animal.patrol_range = rng.randf_range(config["patrol_range_min"], config["patrol_range_max"])
+
+	return animal
 
 
 ## Add 3D label above obstacle
@@ -624,4 +746,49 @@ func _get_obstacle_height_offset(type: String) -> float:
 		return 0.3  # Grass: CylinderMesh height=0.6m, origin at center
 	elif type == "rock":
 		return 0.7  # Rock: SphereMesh height≈1.4m, origin at center
+	elif type == "wolf" or type == "deer_1" or type == "deer_2":
+		# Animals: Use config height_offset
+		if type in ANIMAL_CONFIGS:
+			return ANIMAL_CONFIGS[type]["height_offset"]
+		return 0.5  # Fallback
 	return 0.0
+
+
+## Get random color for animal type
+func _get_animal_color(type: String, rng: RandomNumberGenerator) -> Color:
+	if type == "wolf":
+		var wolf_colors = [
+			Color(0.5, 0.3, 0.3),   # Dark grey-red
+			Color(0.4, 0.4, 0.4),   # Grey
+			Color(0.35, 0.3, 0.25)  # Dark brown
+		]
+		return wolf_colors[rng.randi() % wolf_colors.size()]
+	elif type == "deer_1" or type == "deer_2":
+		var deer_colors = [
+			Color(0.6, 0.4, 0.2),   # Brown
+			Color(0.5, 0.45, 0.35), # Tan
+			Color(0.45, 0.35, 0.25) # Dark brown
+		]
+		return deer_colors[rng.randi() % deer_colors.size()]
+	return Color(0.5, 0.5, 0.5)  # Default grey
+
+
+## Apply solid color material to animal
+func _apply_solid_color_to_animal(animal: Node3D, color: Color) -> void:
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.8  # Slightly rough for fur/skin
+	material.metallic = 0.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	_apply_material_to_meshes(animal, material)
+
+
+## Recursively apply material to all MeshInstance3D nodes
+func _apply_material_to_meshes(node: Node, material: Material) -> void:
+	if node is MeshInstance3D:
+		node.material_override = material
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	for child in node.get_children():
+		_apply_material_to_meshes(child, material)

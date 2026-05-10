@@ -8,174 +8,91 @@ signal tracks_updated(track_count: int)
 
 @export var player: CharacterBody3D  # Reference to player
 @export var max_tracks := 30  # Maximum number of track decals (FIFO)
-@export var track_lifetime := 30.0  # Fade time (seconds)
-@export var track_width := 2.0  # Width of ski track (enlarged for testing)
-@export var track_length := 5.0  # Length of ski track (enlarged for testing)
 
-# Decal material
-var track_material: StandardMaterial3D
-
-# Active track decals
-var active_tracks: Array[Dictionary] = []  # {decal: Decal, spawn_time: float, position: Vector3}
-
-# Track mesh (simple quad)
-var track_mesh: Mesh
+# MultiMesh system for performance
+var multi_mesh_instance: MultiMeshInstance3D
+var multi_mesh: MultiMesh
+var current_track_index: int = 0
 
 
 func _ready() -> void:
-	_create_track_material()
-	_create_track_mesh()
+	_initialize_multi_mesh()
 
 	if not player:
 		push_warning("SkiTracks: No player reference set!")
 
 
-## Create material for ski tracks
-func _create_track_material() -> void:
-	track_material = StandardMaterial3D.new()
+## Initialize MultiMesh system for high-performance track rendering
+func _initialize_multi_mesh() -> void:
+	# Create MultiMesh
+	multi_mesh = MultiMesh.new()
+	multi_mesh.transform_format = MultiMesh.TRANSFORM_3D
+	multi_mesh.instance_count = max_tracks
 
-	# Light gray ski tracks
-	track_material.albedo_color = Color(0.7, 0.7, 0.7, 1.0)
-
-	# Transparent for fading
-	track_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	track_material.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
-
-	# No emission
-	track_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
-
-## Create simple quad mesh for track
-func _create_track_mesh() -> void:
-	var quad_mesh = QuadMesh.new()
-	quad_mesh.size = Vector2(track_width, track_length)
-	track_mesh = quad_mesh
-
-
-func _process(delta: float) -> void:
-	# Update and fade tracks
-	_update_tracks(delta)
-
-
-## Create simple track texture (gradient)
-func _create_track_texture() -> Texture2D:
-	# Create simple white texture (decal will modulate color)
-	var image = Image.create(32, 64, false, Image.FORMAT_RGBA8)
-
-	# Fill with gradient (darker in center, lighter at edges)
-	for y in range(64):
-		for x in range(32):
-			var dist_from_center = abs(x - 16) / 16.0
-			var alpha = 1.0 - (dist_from_center * 0.5)
-			image.set_pixel(x, y, Color(1, 1, 1, alpha))
-
-	return ImageTexture.create_from_image(image)
-
-
-## Update tracks and fade old ones
-func _update_tracks(delta: float) -> void:
-	var current_time = Time.get_ticks_msec() / 1000.0
-
-	# Check tracks from oldest to newest
-	var i = 0
-	while i < active_tracks.size():
-		var track_data = active_tracks[i]
-		var age = current_time - track_data["spawn_time"]
-
-		if age >= track_lifetime:
-			# Remove expired track
-			_remove_track(i)
-			# Don't increment i, check same index again
-		else:
-			# Fade track based on age (works for both Decal and MeshInstance3D)
-			var fade_progress = age / track_lifetime
-			var node = track_data["decal"]  # Can be Decal or MeshInstance3D
-
-			# Try to fade (works for MeshInstance3D material)
-			if node is MeshInstance3D:
-				var mat = node.material_override as StandardMaterial3D
-				if mat:
-					var alpha = 1.0 - fade_progress
-					mat.albedo_color.a = alpha
-			elif node is Decal:
-				var alpha = 1.0 - fade_progress
-				node.modulate.a = alpha
-
-			i += 1
-
-
-## Remove track at index
-func _remove_track(index: int) -> void:
-	if index < 0 or index >= active_tracks.size():
-		return
-
-	var track_data = active_tracks[index]
-	var node = track_data["decal"]  # Can be Decal or MeshInstance3D
-
-	# Remove from scene
-	if node:
-		node.queue_free()
-
-	# Remove from array
-	active_tracks.remove_at(index)
-
-	tracks_updated.emit(active_tracks.size())
-
-
-## Clear all tracks
-func clear_tracks() -> void:
-	for track_data in active_tracks:
-		var decal: Decal = track_data["decal"]
-		if decal:
-			decal.queue_free()
-
-	active_tracks.clear()
-	tracks_updated.emit(0)
-
-
-## Get current track count
-func get_track_count() -> int:
-	return active_tracks.size()
-
-
-## Set track lifetime
-func set_track_lifetime(seconds: float) -> void:
-	track_lifetime = max(10.0, seconds)  # Minimum 10 seconds
-
-
-## Create track at specific position with custom size (called from player collision detection)
-func create_track_at_position(pos: Vector3, size: Vector3, part_name: String):
-	# Remove oldest track if at limit
-	if active_tracks.size() >= max_tracks:
-		_remove_track(0)
-
-	# Create MeshInstance3D (using debug red box)
-	var mesh_instance = MeshInstance3D.new()
+	# Create shared mesh (ski size: 0.075m width × 0.05m height × 1.2m length)
 	var box_mesh = BoxMesh.new()
-	box_mesh.size = Vector3(size.x * 0.5, size.y, size.z)  # Width 50% thinner
-	mesh_instance.mesh = box_mesh
+	box_mesh.size = Vector3(0.075, 0.05, 1.2)
+	multi_mesh.mesh = box_mesh
 
-	# Light gray unshaded material
+	# Create MultiMeshInstance3D
+	multi_mesh_instance = MultiMeshInstance3D.new()
+	multi_mesh_instance.multimesh = multi_mesh
+	multi_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	# Create material (light gray unshaded)
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.7, 0.7, 0.7)
+	material.albedo_color = Color(0.7, 0.7, 0.7, 1.0)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.emission_enabled = true
 	material.emission = Color(0.7, 0.7, 0.7)
 	material.emission_energy_multiplier = 2.0
-	mesh_instance.material_override = material
+	multi_mesh_instance.material_override = material
 
-	# Position slightly above ground
-	mesh_instance.global_position = pos + Vector3(0, 0.05, 0)
-	mesh_instance.rotation.y = player.rotation.y if player else 0.0
+	# Add to scene
+	get_tree().root.add_child(multi_mesh_instance)
 
-	# Add to scene root (independent of player)
-	get_tree().root.add_child(mesh_instance)
+	# Initialize all instances as invisible (move far away)
+	for i in range(max_tracks):
+		var t = Transform3D()
+		t.origin = Vector3(0, -1000, 0)  # Hide below terrain
+		multi_mesh.set_instance_transform(i, t)
 
-	# Track for fading
-	active_tracks.append({
-		"decal": mesh_instance,
-		"spawn_time": Time.get_ticks_msec() / 1000.0,
-		"position": pos
-	})
+	print("[SkiTracks] MultiMesh initialized with %d slots" % max_tracks)
 
-	tracks_updated.emit(active_tracks.size())
+
+## Clear all tracks (hide all instances)
+func clear_tracks() -> void:
+	for i in range(max_tracks):
+		var t = Transform3D()
+		t.origin = Vector3(0, -1000, 0)  # Hide below terrain
+		multi_mesh.set_instance_transform(i, t)
+
+	current_track_index = 0
+	tracks_updated.emit(0)
+
+
+## Get current track count (always max_tracks after initial fill)
+func get_track_count() -> int:
+	return max_tracks
+
+
+## Create track at specific position (MultiMesh version - high performance)
+## size and part_name parameters ignored - all tracks use ski size
+func create_track_at_position(pos: Vector3, size: Vector3, part_name: String):
+	# Create transform for this track
+	var t = Transform3D()
+	t.origin = pos + Vector3(0, 0.05, 0)  # Slightly above ground
+
+	# Rotate to match player direction
+	if player:
+		t.basis = t.basis.rotated(Vector3.UP, player.rotation.y)
+
+	# Set instance transform (FIFO: overwrites oldest track)
+	multi_mesh.set_instance_transform(current_track_index, t)
+	multi_mesh.set_instance_color(current_track_index, Color(0.7, 0.7, 0.7, 1.0))
+
+	# Move to next slot (circular buffer: 0→1→...→29→0)
+	current_track_index = (current_track_index + 1) % max_tracks
+
+	# Emit signal (always 30 tracks after initial fill)
+	tracks_updated.emit(max_tracks)

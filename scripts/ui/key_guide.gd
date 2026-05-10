@@ -4,7 +4,7 @@ extends Label
 
 func _ready() -> void:
 	# 텍스트 설정
-	text = "[W/A/S/D] 이동  [Space] 점프  [Shift] 묘기(Tail Grab)  [Tab] 카메라 전환  [R] 리스폰"
+	text = "[W/A/S/D] 이동  [Space] 점프  [Shift] 묘기(Tail Grab)  [Tab] 카메라 전환  [R] 리스폰  [ESC] 장비변경"
 
 	# 위치 설정: 화면 상단 중앙
 	anchor_left = 0.5

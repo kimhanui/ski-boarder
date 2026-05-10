@@ -10,13 +10,14 @@ class_name TerrainGeneratorV2
 ## @param length_m: Length of terrain in meters (default: 1500)
 ## @param height_y: Height position at the start of terrain (default: 0)
 ## @param slope_angle_deg: Slope angle in degrees (default: 20, range: 0-45)
+## @param animal_count: Number of animals to spawn (default: 0)
 ## @return StaticBody3D containing the terrain mesh and collision
-static func create_flat_terrain(width_m: float = 500.0, length_m: float = 1500.0, height_y: float = 0.0, slope_angle_deg: float = 20.0) -> StaticBody3D:
+static func create_flat_terrain(width_m: float = 500.0, length_m: float = 1500.0, height_y: float = 0.0, slope_angle_deg: float = 20.0, animal_count: int = 0) -> StaticBody3D:
 	print("[TerrainV2] Creating sloped terrain: %.1fx%.1f meters at Y=%.1f, slope=%.1f°" % [width_m, length_m, height_y, slope_angle_deg])
 
-	# Mesh resolution (vertices per axis)
-	var segments_x = 100
-	var segments_z = 300
+	# Mesh resolution (vertices per axis) - Reduced for performance (30k → 7.5k vertices)
+	var segments_x = 50  # Was 100
+	var segments_z = 150  # Was 300
 
 	# Build sloped terrain mesh
 	var terrain_mesh = _build_flat_mesh(width_m, length_m, height_y, segments_x, segments_z, slope_angle_deg)
@@ -62,8 +63,8 @@ static func create_flat_terrain(width_m: float = 500.0, length_m: float = 1500.0
 
 	print("[TerrainV2] Terrain created: %d faces, collision enabled" % [faces.size() / 3])
 
-	# Generate obstacles (rocks and trees)
-	_generate_obstacles(static_body, width_m, length_m, slope_angle_deg)
+	# Generate obstacles (rocks, trees, and animals)
+	_generate_obstacles(static_body, width_m, length_m, height_y, slope_angle_deg, 12345, animal_count)
 
 	return static_body
 
@@ -105,6 +106,14 @@ static func _build_flat_mesh(width_m: float, length_m: float, height_y: float, s
 	var hole_radius = 12.0  # Meters (smaller)
 	var hole_depth = 3.0    # Meters at center (shallower)
 
+	# Define 2 hill positions (below holes)
+	var hill_positions = [
+		Vector3(-40, 0, -110),   # Left hill
+		Vector3(40, 0, -120),    # Right hill
+	]
+	var hill_radius = 12.0  # Same as holes
+	var hill_height = 3.0   # Max height = hole max depth
+
 	# Generate vertices
 	for z in range(segments_z + 1):
 		for x in range(segments_x + 1):
@@ -132,10 +141,31 @@ static func _build_flat_mesh(width_m: float, length_m: float, height_y: float, s
 
 			pos_y -= hole_depth_reduction
 
-			# Calculate vertex color (green in holes, gray outside)
+			# Apply hill height addition
+			var hill_height_addition = 0.0
+			var hill_color_intensity = 0.0  # Track color intensity for hills
+			for hill_pos in hill_positions:
+				# Calculate horizontal distance (XZ plane) to hill center
+				var dist_xz = sqrt(pow(pos_x - hill_pos.x, 2) + pow(pos_z - hill_pos.z, 2))
+
+				# Apply cosine falloff for smooth edges
+				if dist_xz < hill_radius:
+					var normalized_dist = dist_xz / hill_radius
+					var falloff = cos(normalized_dist * PI * 0.5)  # Smooth 0-1 curve
+					hill_height_addition += falloff * hill_height
+					hill_color_intensity = max(hill_color_intensity, falloff)  # Use strongest hill influence
+
+			pos_y += hill_height_addition  # ADD height (opposite of holes)
+
+			# Calculate vertex color (gray in holes, white on hills, gray base)
 			var base_color = Color(0.6, 0.6, 0.6)      # Darker gray snow (60% brightness)
-			var hole_color = Color(0.15, 0.5, 0.15)    # Very dark green (forest green)
+			var hole_color = Color(0.4, 0.4, 0.4)      # Medium gray (darker than base)
+			var hill_color = Color(1.0, 1.0, 1.0)      # Bright white snow
+
+			# Apply hole color first
 			var vertex_color = base_color.lerp(hole_color, hole_color_intensity)
+			# Then apply hill color (additive brightening)
+			vertex_color = vertex_color.lerp(hill_color, hill_color_intensity)
 
 			vertices.append(Vector3(pos_x, pos_y, pos_z))
 			normals.append(surface_normal)  # Consistent normal for entire sloped surface
@@ -206,12 +236,13 @@ static func _create_shadow_optimized_material() -> StandardMaterial3D:
 
 
 ## Generates obstacles for V2 terrain
-static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m: float, slope_angle_deg: float, seed_value: int = 12345) -> void:
+static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m: float, height_y: float, slope_angle_deg: float, seed_value: int = 12345, animal_count: int = 0) -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = seed_value
 
 	# Obstacle configuration
-	var obstacle_count = 15  # Similar to V1
+	var rock_count = 8  # Rocks only
+	var tree_count = 7  # Trees (each tree gets 2 animals next to it)
 	var start_z = 50.0  # Match mesh generation
 	var slope_angle_rad = deg_to_rad(slope_angle_deg)
 	var slope_ratio = tan(slope_angle_rad)
@@ -219,7 +250,10 @@ static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m:
 	var obstacles_node = Node3D.new()
 	obstacles_node.name = "Obstacles"
 
-	for i in range(obstacle_count):
+	var total_animals = 0
+
+	# Generate rocks
+	for i in range(rock_count):
 		# Random position across terrain
 		var x = rng.randf_range(-width_m/2.0 + 10.0, width_m/2.0 - 10.0)
 		var z = rng.randf_range(-length_m + 60, -10)  # Avoid spawn area and far edge
@@ -227,23 +261,58 @@ static func _generate_obstacles(terrain: StaticBody3D, width_m: float, length_m:
 		# Calculate height based on slope
 		var z_distance = start_z - z
 		var y_drop = z_distance * slope_ratio
-		var y = -y_drop  # Ground level (collision shapes handle elevation)
+		var y = height_y - y_drop  # Ground level
 
-		# Random obstacle type and scale
-		var type = "rock" if rng.randf() > 0.4 else "tree"
 		var scale_val = rng.randf_range(0.8, 1.5)
+		var y_offset = 0.7  # Rocks: center pivot offset
 
-		# Create obstacle mesh
-		var obstacle = _create_obstacle_mesh(type, scale_val)
-		obstacle.position = Vector3(x, y, z)
-		obstacles_node.add_child(obstacle)
+		# Create rock
+		var rock = _create_obstacle_mesh("rock", scale_val, rng)
+		rock.position = Vector3(x, y + y_offset, z)
+		obstacles_node.add_child(rock)
+
+	# Generate trees with 2 animals next to each
+	for i in range(tree_count):
+		# Random position across terrain
+		var x = rng.randf_range(-width_m/2.0 + 10.0, width_m/2.0 - 10.0)
+		var z = rng.randf_range(-length_m + 60, -10)  # Avoid spawn area and far edge
+
+		# Calculate height based on slope
+		var z_distance = start_z - z
+		var y_drop = z_distance * slope_ratio
+		var y = height_y - y_drop  # Ground level
+
+		var scale_val = rng.randf_range(1.0, 3.0)  # Trees 1~3x size
+
+		# Create tree
+		var tree = _create_obstacle_mesh("tree", scale_val, rng)
+		tree.position = Vector3(x, y, z)  # No offset for tree
+		obstacles_node.add_child(tree)
+
+		# Add 2 animals next to the tree (left and right)
+		var animal_types = ["wolf", "deer_1", "deer_2"]
+		for side in [-1, 1]:  # -1 = left, 1 = right
+			var animal_type = animal_types[rng.randi() % animal_types.size()]
+			var animal_x_offset = side * rng.randf_range(2.5, 4.0)  # 2.5~4m to the side
+			var animal_z_offset = rng.randf_range(-1.0, 1.0)  # Slight Z variation
+
+			var animal_scale = rng.randf_range(2.0, 3.0)  # 2~3x larger
+			var animal = _create_obstacle_mesh(animal_type, animal_scale, rng)
+			animal.position = Vector3(x + animal_x_offset, y, z + animal_z_offset)  # Same Y as tree
+
+			# Randomly rotate some animals 90 degrees (left or right) for variety
+			if rng.randf() > 0.5:
+				animal.rotation.y = deg_to_rad(90 if rng.randf() > 0.5 else -90)
+
+			obstacles_node.add_child(animal)
+			total_animals += 1
 
 	terrain.add_child(obstacles_node)
-	print("[TerrainV2] Generated %d obstacles" % obstacle_count)
+	print("[TerrainV2] Generated %d rocks, %d trees, %d animals (2 per tree)" % [rock_count, tree_count, total_animals])
 
 
-## Creates a single obstacle with collision (rock or tree)
-static func _create_obstacle_mesh(type: String, scale_val: float) -> StaticBody3D:
+## Creates a single obstacle with collision (rock, tree, or animal)
+static func _create_obstacle_mesh(type: String, scale_val: float, rng: RandomNumberGenerator = null) -> StaticBody3D:
 	# Create StaticBody3D for collision (same as V1)
 	var obstacle = StaticBody3D.new()
 	obstacle.collision_layer = 2  # Environment layer (same as terrain)
@@ -316,4 +385,126 @@ static func _create_obstacle_mesh(type: String, scale_val: float) -> StaticBody3
 		collision_shape.shape = cylinder_shape
 		obstacle.add_child(collision_shape)
 
+	elif type == "wolf" or type == "deer_1" or type == "deer_2":
+		# Load animal FBX model
+		var animal_paths = {
+			"wolf": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/wolf.fbx",
+			"deer_1": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/deer_1.fbx",
+			"deer_2": "res://assets/models/animals/Free Wild Animal 3D Models/fbx/unity/deer_2.fbx"
+		}
+
+		var animal_scene = load(animal_paths[type])
+		if animal_scene:
+			var animal = animal_scene.instantiate()
+			animal.scale = Vector3.ONE * scale_val
+
+			# Apply wolf_controller script for patrol behavior
+			var controller_script = load("res://scripts/animals/wolf_controller.gd")
+			if controller_script:
+				animal.set_script(controller_script)
+
+				# Set patrol properties
+				if rng:
+					animal.set("patrol_speed", rng.randf_range(1.5, 3.0))
+					animal.set("patrol_range", 2.0)  # 2m back-and-forth movement
+					var direction = 1.0 if rng.randf() > 0.5 else -1.0
+					animal.set("patrol_direction_multiplier", direction)
+
+			# Apply color to animal based on type
+			var animal_color = Color.WHITE
+			if type == "wolf":
+				animal_color = Color(0.5, 0.5, 0.5)  # Gray
+			elif type == "deer_1":
+				animal_color = Color(0.6, 0.4, 0.2)  # Brown
+			elif type == "deer_2":
+				animal_color = Color(0.7, 0.5, 0.3)  # Light brown
+
+			_apply_color_to_meshes(animal, animal_color)
+
+			obstacle.add_child(animal)
+
+		# Add simple collision shape for animal
+		var collision_shape = CollisionShape3D.new()
+		var capsule_shape = CapsuleShape3D.new()
+		capsule_shape.radius = 0.5 * scale_val
+		capsule_shape.height = 1.5 * scale_val
+		collision_shape.shape = capsule_shape
+		obstacle.add_child(collision_shape)
+
 	return obstacle
+
+
+## Recursively apply color to all MeshInstance3D nodes in a tree
+static func _apply_color_to_meshes(node: Node, color: Color) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance = node as MeshInstance3D
+
+		# Create new material with specified color
+		var material = StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = 0.8
+		material.metallic = 0.0
+
+		# Apply material to all surfaces of the mesh
+		if mesh_instance.mesh:
+			var surface_count = mesh_instance.mesh.get_surface_count()
+			for i in range(surface_count):
+				mesh_instance.set_surface_override_material(i, material)
+
+	# Recursively apply to all children
+	for child in node.get_children():
+		_apply_color_to_meshes(child, color)
+
+
+## Creates a finish line platform at the end of the terrain
+static func create_finish_line(z_position: float, y_position: float) -> Node3D:
+	var finish_node = Node3D.new()
+	finish_node.name = "FinishLine"
+
+	# Golden platform (visual marker)
+	var platform = MeshInstance3D.new()
+	var platform_mesh = CylinderMesh.new()
+	platform_mesh.top_radius = 5.0
+	platform_mesh.bottom_radius = 5.0
+	platform_mesh.height = 0.5
+	platform.mesh = platform_mesh
+	platform.position = Vector3(0, y_position + 0.25, z_position)
+
+	var gold_material = StandardMaterial3D.new()
+	gold_material.albedo_color = Color(1.0, 0.84, 0.0)  # Gold color
+	gold_material.metallic = 0.8
+	gold_material.roughness = 0.2
+	gold_material.emission_enabled = true
+	gold_material.emission = Color(1.0, 0.84, 0.0)
+	gold_material.emission_energy_multiplier = 0.5
+	platform_mesh.surface_set_material(0, gold_material)
+
+	finish_node.add_child(platform)
+
+	# Detection area for player
+	var area = Area3D.new()
+	area.name = "FinishArea"
+	area.collision_layer = 4  # Layer 4 for finish line
+	area.collision_mask = 1  # Detect player (layer 1)
+	area.monitoring = true  # Enable monitoring
+	area.monitorable = true  # Make it monitorable
+	area.position = Vector3(0, y_position + 1.0, z_position)
+
+	# Attach detection script
+	var detector_script = load("res://scripts/terrain/finish_line_detector.gd")
+	if detector_script:
+		area.set_script(detector_script)
+		print("[TerrainV2] Finish line detector script attached")
+
+	var collision_shape = CollisionShape3D.new()
+	var cylinder_shape = CylinderShape3D.new()
+	cylinder_shape.radius = 5.0
+	cylinder_shape.height = 3.0
+	collision_shape.shape = cylinder_shape
+	area.add_child(collision_shape)
+
+	finish_node.add_child(area)
+
+	print("[TerrainV2] Created finish line at Z=%.1f, Y=%.1f" % [z_position, y_position])
+
+	return finish_node

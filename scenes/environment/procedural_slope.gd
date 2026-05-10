@@ -80,10 +80,38 @@ func _load_and_build_terrain() -> void:
 
 	if not _terrain_v2:
 		print("=== Generating V2 (Flat) Terrain ===")
-		_terrain_v2 = TerrainGeneratorV2.create_flat_terrain(100.0, 200.0)  # 100m width × 200m length
+
+		# Create container for V2 terrain sections
+		_terrain_v2 = Node3D.new()
 		_terrain_v2.name = "TerrainV2"
 		add_child(_terrain_v2)
-		print("V2 terrain created")
+
+		# Section 1: Steep (20°, 100m × 200m)
+		var steep_section = TerrainGeneratorV2.create_flat_terrain(100.0, 200.0, 0.0, 20.0)
+		steep_section.name = "SteepSection"
+		_terrain_v2.add_child(steep_section)
+		print("  Steep section: 100m × 200m, 20° slope")
+
+		# Section 2: Gentle (10°, 100m × 200m) with animals next to trees
+		# Calculate steep section drop: 200m at 20° = 72.8m drop
+		var steep_drop = 200.0 * tan(deg_to_rad(20.0))
+		var gentle_section = TerrainGeneratorV2.create_flat_terrain(100.0, 200.0, -steep_drop, 10.0)
+		gentle_section.name = "GentleSection"
+		# Position gentle section below steep section (Z offset by length)
+		gentle_section.position.z = -200.0
+		_terrain_v2.add_child(gentle_section)
+		print("  Gentle section: 100m × 200m, 10° slope, 2 animals per tree, starting at Y=%.1f, Z=-200" % -steep_drop)
+
+		# Add finish line at the end of gentle section
+		# Gentle section: Z = -200 to -400, Y drops another ~35m
+		var gentle_drop = 200.0 * tan(deg_to_rad(10.0))
+		var finish_z = -380.0  # Near the end of terrain
+		var finish_y = -steep_drop - gentle_drop + 2.0  # Slightly above final terrain level
+		var finish_line = TerrainGeneratorV2.create_finish_line(finish_z, finish_y)
+		_terrain_v2.add_child(finish_line)
+		print("  Finish line: Z=%.1f, Y=%.1f" % [finish_z, finish_y])
+
+		print("V2 terrain created (2 sections, total 400m)")
 
 	# Show only the current terrain version
 	_show_active_terrain()
@@ -106,7 +134,7 @@ func _position_player_at_start(data: Dictionary, diff: String) -> void:
 	# V2 지형은 Y=0 부근에 있으므로 다른 높이 사용
 	if terrain_version == 1:  # V2 (Flat)
 		# V2는 0-200m 길이의 평평한 경사면, Y=0 부근
-		start_point = [0, 5, -20]  # 지형 표면 약간 위
+		start_point = [0, 5, 50]  # 슬로프 최상단 (Z=+50)
 		print("Calculated V2 start point: [%.1f, %.1f, %.1f]" % [start_point[0], start_point[1], start_point[2]])
 	elif not diff.is_empty():
 		# V1 Procedural: use config to get start height

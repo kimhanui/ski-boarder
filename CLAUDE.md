@@ -6,6 +6,57 @@
 
 스키 보더 게임을 위한 Godot 게임 프로젝트입니다. 현재 초기 설정 단계에 있습니다.
 
+## 문서 참조 가이드
+
+이 프로젝트의 상세 문서는 `prompt/` 폴더에 정리되어 있습니다. Claude Code로 작업 시 **반드시** 다음 문서를 참조하세요:
+
+### 📋 필수 시스템 문서
+작업 전 반드시 읽어야 할 핵심 문서:
+
+- **prompt/PLAYER.md** (35KB) - 플레이어 시스템 완전 가이드
+  - V3 FSM 상태 머신 (7 states)
+  - 착지 판정 (Tilt-only 60° threshold)
+  - 자동 복구 시스템 (FALLEN → RECOVER)
+  - 애니메이션 시스템 V2
+  - 트릭 시스템 개요
+
+- **prompt/CAMERA.md** (32KB) - 카메라 + UI 시스템
+  - 4-카메라 모드 (3rd Back/Front, 1st Person, Free)
+  - Minimap 시스템 (SubViewport, 직교 투영)
+  - Density Controls UI
+
+- **prompt/TRICKS.md** (25KB) - 트릭 시스템
+  - Backflip, Frontflip, Tail Grab 구현
+  - 점수 계산 및 Perfect Landing
+  - 새 트릭 추가 가이드 (7단계)
+
+- **prompt/SLOPE.md** (31KB) - 지형 생성 시스템
+  - Heightmap generation
+  - Z-offset critical bug fix
+  - 난이도 시스템
+
+- **prompt/UI.md** (13KB) - UI 시스템
+  - Difficulty selector, Density controls
+  - Minimap, HUD
+
+- **prompt/OBSTACLES.md** (12KB) - 장애물 시스템
+  - Scene-based obstacles
+  - ObstacleFactory 아키텍처
+  - Density modes (Sparse/Normal/Dense)
+
+### 🛠️ 설정/참조 문서
+
+- **prompt/PLAYER_V3_SETUP.md** - Player V3 설치 가이드
+- **prompt/CREATE_PLAYER.json** - 3D 캐릭터 모델 제작 명세
+- **prompt/PLAYER_ANIMATION.md** - Skeleton 기반 애니메이션 가이드
+- **prompt/ADD.md** - 현재 작업 컨텍스트 (최신 프롬프트)
+
+### ⚠️ 문서 사용 원칙
+
+1. **작업 시작 전 필수 참조**: 해당 시스템 관련 작업 시 반드시 문서 읽기
+2. **코드 변경 시 문서 업데이트**: 중요 변경사항은 문서에도 반영
+3. **Single Source of Truth**: 코드와 문서 불일치 시 코드가 우선, 문서 수정 필요
+
 ## 개발 명령어
 
 ### 게임 실행하기

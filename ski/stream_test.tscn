@@ -1,0 +1,135 @@
+[gd_scene load_steps=16 format=3 uid="uid://cbcwn5tcydj57"]
+
+[ext_resource type="Script" uid="uid://buvdhgek3rxni" path="res://ski/stream_test.gd" id="1_test"]
+[ext_resource type="Script" uid="uid://cpjbgsaewfvw2" path="res://ski/course_streamer.gd" id="2_streamer"]
+[ext_resource type="Script" uid="uid://em0o5el2ejsi" path="res://ski/rail_follower.gd" id="3_rail"]
+[ext_resource type="Script" uid="uid://4nluk7dp37s2" path="res://ski/free_camera.gd" id="4_free"]
+
+[sub_resource type="Gradient" id="Gradient_u7nv5"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_8642e"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_42qeq"]
+seamless = true
+color_ramp = SubResource("Gradient_u7nv5")
+noise = SubResource("FastNoiseLite_8642e")
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_6iav0"]
+_shader_parameters = {
+&"bias_distance": null,
+&"blend_sharpness": null,
+&"depth_blur": null,
+&"enable_macro_variation": null,
+&"enable_projection": null,
+&"flat_terrain_normals": null,
+&"macro_variation1": null,
+&"macro_variation2": null,
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_42qeq"),
+&"projection_threshold": null
+}
+show_checkered = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fnjrl"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_qftrx"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_fnjrl")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_k7e4e"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_qftrx")])
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
+sky_top_color = Color(0.32, 0.5, 0.78, 1)
+sky_horizon_color = Color(0.75, 0.82, 0.9, 1)
+ground_horizon_color = Color(0.75, 0.82, 0.9, 1)
+
+[sub_resource type="Sky" id="Sky_res"]
+sky_material = SubResource("Sky_mat")
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 2
+sky = SubResource("Sky_res")
+ambient_light_source = 3
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.75, 0.82, 0.9, 1)
+fog_density = 0.0012
+fog_sky_affect = 0.0
+
+[sub_resource type="LabelSettings" id="HudFont"]
+font_size = 18
+outline_size = 6
+outline_color = Color(0, 0, 0, 1)
+
+[node name="StreamTest" type="Node3D"]
+script = ExtResource("1_test")
+
+[node name="Terrain3D" type="Terrain3D" parent="."]
+material = SubResource("Terrain3DMaterial_6iav0")
+assets = SubResource("Terrain3DAssets_k7e4e")
+show_checkered = true
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="CourseStreamer" type="Node" parent="." node_paths=PackedStringArray("terrain")]
+script = ExtResource("2_streamer")
+terrain = NodePath("../Terrain3D")
+
+[node name="RailFollower" type="Node3D" parent="." node_paths=PackedStringArray("streamer")]
+script = ExtResource("3_rail")
+streamer = NodePath("../CourseStreamer")
+
+[node name="ChaseCam" type="Camera3D" parent="RailFollower"]
+transform = Transform3D(1, 0, 0, 0, 0.978148, 0.207912, 0, -0.207912, 0.978148, 0, 5, 12)
+far = 3000.0
+
+[node name="FreeCamera" type="Camera3D" parent="."]
+far = 3000.0
+script = ExtResource("4_free")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.383022, 0.321394, 0, 0.642788, 0.766044, -0.5, -0.663414, 0.55667, 0, 100, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 400.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="HUD"]
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 700.0
+offset_bottom = 260.0
+label_settings = SubResource("HudFont")
